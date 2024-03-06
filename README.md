@@ -1,5 +1,7 @@
 # RxPaired: RxPlayer's Able Inspector for REmote Debugging
 
+Trigger CI
+
 This repository contains the RxPaired tool, a lightweight remote inspector adapted for
 devices low on resources which displays supplementary indicators mostly useful when
 using the [RxPlayer](https://github.com/canalplus/rx-player) library.
