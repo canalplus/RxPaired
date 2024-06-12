@@ -31,15 +31,11 @@
     "esbuild": "^0.20.1",
     "http-server": "^14.1.1",
     "str-html": "^0.2.0",
+    "rx-player": "file:../rx-player",
     "ws": "^8.16.0"
   },
   "devDependencies": {
     "prettier": "3.0.1",
     "typescript": "^5.3.3"
-  },
-  "workspaces": [
-    "inspector",
-    "client",
-    "server"
-  ]
+  }
 }
