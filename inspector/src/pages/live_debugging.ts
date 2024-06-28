@@ -22,6 +22,26 @@ import {
 } from "./utils";
 
 /**
+ * We've added the possibility on the RxPlayer to output logs already compatible
+ * with RxPaired (as in: can be imported by it) to ease-up later debugging when
+ * people doing the testing do not rely on RxPaired themselves.
+ *
+ * This format-update feature could also be added to other tools relying on
+ * RxPaired, so it makes sense to detect and work-around that possibility here.
+ *
+ * In the case where the log preamble seems to be repeated two times at the
+ * beginning, we'll remove the second one.
+ *
+ * Match 1: first timestamp + first namespace + space
+ * Match 2: first timestamp
+ * Match 3: first namespace
+ * Match 4: second timestamp
+ * Match 5: second namespace
+ */
+const DOUBLE_FORMATTING_REGEXP =
+  /^(([0-9]+(?:\.[0-9]+)?) \[([^\]]+)\] )([0-9]+(?:\.[0-9]+)?) \[([^\]]+)\] /;
+
+/**
  * Some minor features are detected to be only present on chromium-based
  * browsers for now but are sadly neither polyfillable nor feature-detectable.
  *
@@ -254,7 +274,16 @@ export default function generateLiveDebuggingPage(
         return;
       }
     } else {
-      const newLog = event.data;
+      let newLog = event.data;
+      const regMatch = newLog.match(DOUBLE_FORMATTING_REGEXP);
+
+      // If the beginning repeat with the same namespace, it's very probably
+      // double formatting
+      if (regMatch !== null && regMatch[3] === regMatch[5]) {
+        newLog =
+          newLog.substring(0, regMatch[1].length) +
+          newLog.substring(regMatch[0].length);
+      }
       logViewState.updateState(STATE_PROPS.LOGS_HISTORY, UPDATE_TYPE.PUSH, [
         [newLog, nextLogId++],
       ]);
