@@ -7,7 +7,7 @@ export default new (class Logger {
     this._logFile = null;
   }
 
-  public setLogFile(logFile: string): void {
+  public setLogFile(logFile: string | null): void {
     this._logFile = logFile;
   }
 
@@ -15,7 +15,7 @@ export default new (class Logger {
     console.log(...args);
     const logStr = new Date().toISOString() + " - LOG - " + args.join(" ");
     if (this._logFile !== null) {
-      appendFile("server-logs.txt", logStr + "\n", function () {
+      appendFile(this._logFile, logStr + "\n", function () {
         // on finished. Do nothing for now.
       });
     }
@@ -25,7 +25,7 @@ export default new (class Logger {
     console.warn(...args);
     const logStr = new Date().toISOString() + " - WARN - " + args.join(" ");
     if (this._logFile !== null) {
-      appendFile("server-logs.txt", logStr + "\n", function () {
+      appendFile(this._logFile, logStr + "\n", function () {
         // on finished. Do nothing for now.
       });
     }

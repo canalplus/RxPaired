@@ -27,7 +27,7 @@ export interface ParsedOptions {
   deviceMessageLimit: number;
   inspectorMessageLimit: number;
   persistentTokensFile: string | null;
-  logFile: string;
+  logFile: string | null;
   disableNoToken: boolean;
 }
 
@@ -173,8 +173,7 @@ const optionsDescription = [
     longForm: "log-file",
     argumentDescription: "path",
     description:
-      "Path to the server's log file.\n" +
-      `Defaults to ${DEFAULT_LOG_FILE_PATH}.`,
+      "If set a log file will be created at this path, containing the server's logs.",
     outputVar: "logFile",
   },
   {

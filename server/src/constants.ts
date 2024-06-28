@@ -8,4 +8,4 @@ export const DEFAULT_DEVICE_CONNECTION_LIMIT = 500;
 export const DEFAULT_INSPECTOR_CONNECTION_LIMIT = 500;
 export const DEFAULT_DEVICE_MESSAGE_LIMIT = 1e6;
 export const DEFAULT_INSPECTOR_MESSAGE_LIMIT = 1000;
-export const DEFAULT_LOG_FILE_PATH = "server_logs.txt";
+export const DEFAULT_LOG_FILE_PATH = null;
