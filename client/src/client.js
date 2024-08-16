@@ -127,6 +127,17 @@ function init(currentScriptSrc, playerClass) {
     };
   });
 
+  if (typeof window === "object" && window !== null) {
+    window.addEventListener("error", onGlobalError);
+    spyRemovers.push(() => {
+      window.removeEventListener("error", onGlobalError);
+    });
+    window.addEventListener("unhandledrejection", onGlobalError);
+    spyRemovers.push(() => {
+      window.removeEventListener("unhandledrejection", onGlobalError);
+    });
+  }
+
   if (SHOULD_LOG_REQUESTS) {
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function () {
@@ -220,6 +231,20 @@ function init(currentScriptSrc, playerClass) {
       ? null
       : window.TextDecoder;
   const escape = window.escape;
+
+  /**
+   * Function to trigger when there's a global uncaught error, such as on window.
+   * @param {*} err
+   */
+  function onGlobalError(err) {
+    if (err && err.error) {
+      formatAndSendLog("UncaughtError", processArg(err.error));
+    } else if (err && err.reason) {
+      formatAndSendLog("UncaughtError", processArg(err.reason));
+    } else {
+      formatAndSendLog("UncaughtError", processArg(err));
+    }
+  }
 
   /**
    * Creates a string from the given Uint8Array containing utf-8 code units.
