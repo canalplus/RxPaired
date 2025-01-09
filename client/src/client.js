@@ -68,10 +68,10 @@ function init(currentScriptSrc, playerClass) {
     logQueue.push(log);
   };
 
-  function formatAndSendLog(namespace, log) {
+  function sendNetworkLog(namespace, log) {
     const time = performance.now().toFixed(2);
-    const logText = `${time} [${namespace}] ${log}`;
-    sendLog(logText);
+    const logText = `${time} [Network] ${log}`;
+    return sendLog(logText);
   }
 
   function processArg(arg) {
@@ -117,9 +117,22 @@ function init(currentScriptSrc, playerClass) {
 
   const spyRemovers = ["log", "error", "info", "warn", "debug"].map((meth) => {
     const oldConsoleFn = console[meth];
+    const namespace = `[${meth}]`;
     console[meth] = function (...args) {
       const argStr = args.map(processArg).join(" ");
-      formatAndSendLog(meth, argStr);
+
+      // The RxPlayer might already have set the timestamp + namespace format
+      if (
+        args.length >= 3 &&
+        args[1] === namespace &&
+        /^\d+\.\d+$/.test(args[0])
+      ) {
+        sendLog(argStr);
+      } else {
+        // Else, add it now
+        const time = performance.now().toFixed(2);
+        sendLog(`${time} ${namespace} ${argStr}`);
+      }
       return oldConsoleFn.apply(this, args);
     };
     return function () {
@@ -136,20 +149,19 @@ function init(currentScriptSrc, playerClass) {
         return originalXhrOpen.apply(this, arguments);
       }
       this.addEventListener("load", function () {
-        formatAndSendLog(
-          "Network",
+        sendNetworkLog(
           `Loaded ${method} XHR from: ${url} ` + `(status: ${this.status})`,
         );
       });
       this.addEventListener("error", function () {
-        formatAndSendLog("Network", `Errored ${method} XHR from: ${url}`);
+        sendNetworkLog(`Errored ${method} XHR from: ${url}`);
       });
       this.abort = function () {
-        formatAndSendLog("Network", `Aborted ${method} XHR from: ${url}`);
+        sendNetworkLog(`Aborted ${method} XHR from: ${url}`);
         return XMLHttpRequest.prototype.abort.apply(this, arguments);
       };
       this.send = function () {
-        formatAndSendLog("Network", `Sending ${method} XHR to: ${url}`);
+        sendNetworkLog(`Sending ${method} XHR to: ${url}`);
         return XMLHttpRequest.prototype.send.apply(this, arguments);
       };
       return originalXhrOpen.apply(this, arguments);
@@ -187,21 +199,17 @@ function init(currentScriptSrc, playerClass) {
       } else {
         method = "GET";
       }
-      formatAndSendLog("Network", `Sending ${method} fetch to: ${url}`);
+      sendNetworkLog(`Sending ${method} fetch to: ${url}`);
       const realFetch = originalFetch.apply(this, arguments);
       return realFetch.then(
         (res) => {
-          formatAndSendLog(
-            "Network",
+          sendNetworkLog(
             `Loaded ${method} fetch from: ${url} ` + `(status: ${res.status})`,
           );
           return res;
         },
         (err) => {
-          formatAndSendLog(
-            "Network",
-            `Errored/Aborted ${method} fetch from: ${url}`,
-          );
+          sendNetworkLog(`Errored/Aborted ${method} fetch from: ${url}`);
           throw err;
         },
       );
