@@ -714,6 +714,12 @@ In that scenario, URLs stay the same, but with the following API changes:
   Message** is received from a device, it should be assumed that this is a new
   session with that token.
 
+- If using the `/!notoken` route, the server will send back the generated token
+  for that connection as a response for that HTTP POST request.
+
+  The client should then use that token for subsequent HTTP POST requests which
+  should thus now be on the `/<TOKEN_ID>` URL.
+
 - In HTTP POST mode, the server doesn't send back any message to the device. As
   such, instruction evaluation is not an available feature in that mode.
 

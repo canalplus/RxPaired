@@ -650,6 +650,11 @@ function init(currentScriptSrc, playerClass, silent) {
         return;
       }
       if (xhr.status >= 200 && xhr.status < 300) {
+        // When HTTP POSTing in !notoken mode, we're supposed to
+        // update the token for subsequent requests with the response
+        if (token === "!notoken" || token.substring(0, 9) === "!notoken/") {
+          token = xhr.response;
+        }
         canSendPostRequest = true;
       } else {
         stopSendingLogs();

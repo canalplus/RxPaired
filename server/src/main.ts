@@ -66,6 +66,13 @@ export default async function RxPairedServer(options: ParsedOptions) {
       const messages: string[] = [];
       const metadata = checkNewDeviceConnection(req);
       if (metadata === null) {
+        response.writeHead(403, {
+          /* eslint-disable @typescript-eslint/naming-convention */
+          "Content-Type": "text/plain",
+          "Access-Control-Allow-Origin": "*",
+          /* eslint-enable @typescript-eslint/naming-convention */
+        });
+        response.end();
         return;
       }
       const { tokenId, logFileName, tokenMetadata } = metadata;
@@ -130,11 +137,11 @@ export default async function RxPairedServer(options: ParsedOptions) {
         }
         response.writeHead(200, {
           /* eslint-disable @typescript-eslint/naming-convention */
-          "Content-Type": "text/html",
+          "Content-Type": "text/plain",
           "Access-Control-Allow-Origin": "*",
           /* eslint-enable @typescript-eslint/naming-convention */
         });
-        response.end();
+        response.end(tokenId);
       });
     }
   });
