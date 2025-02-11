@@ -54,31 +54,6 @@ module.exports = {
         },
       },
     ],
-    "@typescript-eslint/indent": [
-      "warn",
-      2,
-      {
-        ArrayExpression: "first",
-        ObjectExpression: "first",
-        CallExpression: { arguments: "first" },
-        FunctionDeclaration: { parameters: "first" },
-        FunctionExpression: { parameters: "first" },
-        VariableDeclarator: "first",
-        SwitchCase: 1,
-        ignoreComments: true,
-        flatTernaryExpressions: true,
-        offsetTernaryExpressions: false,
-        ignoredNodes: [
-          /* Does not seem to have ConditionalExpression: "first" */
-          "ConditionalExpression",
-          /* Again, no "first" for all of them */
-          "TSTypeParameterInstantiation",
-          "TSTypeAliasDeclaration *",
-          "TSInterfaceDeclaration *",
-          "TSUnionType *",
-        ],
-      },
-    ],
     "@typescript-eslint/naming-convention": [
       "error",
       {
@@ -179,16 +154,6 @@ module.exports = {
     "arrow-parens": ["off", "always"],
     // TODO?
     // "class-methods-use-this": "error",
-    "comma-dangle": [
-      "error",
-      {
-        objects: "always-multiline",
-        arrays: "always-multiline",
-        imports: "always-multiline",
-        exports: "always-multiline",
-        functions: "never",
-      },
-    ],
     complexity: [
       "off",
       {
