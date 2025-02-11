@@ -24,6 +24,10 @@ const __FORCED_SERVER_URL__ = "";
  */
 
 function init(currentScriptSrc, playerClass, silent) {
+  /**
+   * URL relied on to exchange with the RxPaired server when a WebSocket
+   * connection is established.
+   */
   let wsUrl = _DEVICE_DEBUGGER_URL_;
   if (__FORCED_SERVER_URL__ !== "") {
     if (/^https?:\/\//i.test(__FORCED_SERVER_URL__)) {
@@ -32,10 +36,22 @@ function init(currentScriptSrc, playerClass, silent) {
       wsUrl = __FORCED_SERVER_URL__;
     }
   }
+  // Remove trailing slash
   if (wsUrl.length > 0 && wsUrl[wsUrl.length - 1] === "/") {
     wsUrl = wsUrl.substring(0, wsUrl.length - 1);
   }
+  /**
+   * Fallback HTTP URL relied on to exchange with the RxPaired server when
+   * WebSockets are not available.
+   */
+  let fallbackHttpUrl;
+  if (/^wss?:\/\//i.test(wsUrl)) {
+    fallbackHttpUrl = "http" + wsUrl.substring(2);
+  } else {
+    fallbackHttpUrl = wsUrl;
+  }
 
+  /** "Token" associated to this device's log. */
   let token = __FORCED_TOKEN__;
   if (token === "") {
     if (typeof _BUILD_TIME_TOKEN_VALUE_ === "string") {
@@ -54,12 +70,42 @@ function init(currentScriptSrc, playerClass, silent) {
   /** To set to true if you also want to log when xhr are received / sent */
   const SHOULD_LOG_REQUESTS = true;
 
+  /**
+   * This script may fallback to HTTP POST if WebSockets are unavailable on the
+   * current device.
+   *
+   * To avoid doing too many POST requests, we regroup multiple logs and send
+   * them at once.
+   * This `TARGET_POST_INTERVAL_MS` value is the amount of time in
+   * milliseconds we will want to wait between requests.
+   */
+  const TARGET_POST_INTERVAL_MS = 2000;
+
+  /**
+   * If we fallbacked to HTTP POST instead of a WebSocket, this value is the
+   * result of a `performance.now` call at the time the last HTTP POST was
+   * performed.
+   */
+  let lastHttpPostTimestamp = 0;
+  /**
+   * If we fallbacked to HTTP POST instead of a WebSocket, this value is set
+   * to the timeout id (as returned by `setTimeout`) which will trigger an HTTP
+   * POST. Set to `null` if no such timeout is set right now.
+   */
+  let postponedPostTimeout = null;
+  /** Set to `true` when an HTTP POST request can be sent to send logs */
+  let canSendPostRequest = false;
+
   /** WebSocket connection used for debugging. */
   const socket = new WebSocket(wsUrl + "/" + token);
 
   /** Unsent Log queue used before WebSocket initialization */
   const logQueue = [];
 
+  /**
+   * Maximum length a single log message can reach, longer logs will be
+   * truncated.
+   */
   const MAX_LOG_LENGTH = 2000;
 
   /** Method used to send log. */
@@ -68,6 +114,12 @@ function init(currentScriptSrc, playerClass, silent) {
     logQueue.push(log);
   };
 
+  /**
+   * Add "formatting" to a log message (timestamp and namespace) and send it to
+   * RxPaired's server.
+   * @param {string} namespace - The "namespace" of the log
+   * @param {string} log - The log message.
+   */
   function formatAndSendLog(namespace, log) {
     const time = performance.now().toFixed(2);
     const logText = `${time} [${namespace}] ${log}`;
@@ -401,15 +453,6 @@ function init(currentScriptSrc, playerClass, silent) {
     }
   }
 
-  /**
-   * Stop spying on JavaScript methods, just reset their original behavior.
-   */
-  function abort() {
-    logQueue.length = 0;
-    spyRemovers.forEach((cb) => cb());
-    spyRemovers.length = 0;
-  }
-
   socket.addEventListener("open", function () {
     sendLog = (log) => socket.send(log);
     for (const log of logQueue) {
@@ -418,8 +461,8 @@ function init(currentScriptSrc, playerClass, silent) {
     logQueue.length = 0;
   });
 
-  socket.addEventListener("error", abort);
-  socket.addEventListener("close", abort);
+  socket.addEventListener("error", onWebSocketError);
+  socket.addEventListener("close", onWebSocketError);
 
   socket.addEventListener("message", function (event) {
     if (event == null || event.data == null) {
@@ -543,6 +586,86 @@ function init(currentScriptSrc, playerClass, silent) {
       return processed.substring(0, MAX_LOG_LENGTH - 1) + "…";
     }
     return processed;
+  }
+
+  /**
+   * Actions taken when the WebSocket connection fails.
+   * Just fallback to HTTP POST requests.
+   */
+  function onWebSocketError() {
+    canSendPostRequest = true;
+    try {
+      socket.close();
+    } catch (_) {}
+    const postLogsInBulk = () => {
+      if (postponedPostTimeout !== null) {
+        clearTimeout(postponedPostTimeout);
+        postponedPostTimeout = null;
+      }
+      if (!canSendPostRequest) {
+        postponedPostTimeout = setTimeout(
+          postLogsInBulk,
+          TARGET_POST_INTERVAL_MS,
+        );
+        return;
+      }
+      // Use NUL byte as separator, why not?
+      const toSend = logQueue.join("\0");
+      logQueue.length = 0;
+      lastHttpPostTimestamp = performance.now();
+      sendAsPost(toSend);
+    };
+    sendLog = (log) => {
+      logQueue.push(log);
+      checkIfLogsShouldBeSent();
+    };
+    checkIfLogsShouldBeSent();
+    function checkIfLogsShouldBeSent() {
+      const now = performance.now();
+      if (now - lastHttpPostTimestamp >= TARGET_POST_INTERVAL_MS) {
+        postLogsInBulk();
+      } else {
+        if (postponedPostTimeout !== null) {
+          clearTimeout(postponedPostTimeout);
+          postponedPostTimeout = null;
+        }
+        postponedPostTimeout = setTimeout(
+          postLogsInBulk,
+          TARGET_POST_INTERVAL_MS,
+        );
+      }
+    }
+  }
+
+  /**
+   * Send given logging data as an HTTP POST request.
+   * @param {string} data
+   */
+  function sendAsPost(data) {
+    // As a poor man's request ordering algorithm, we only send POST one at a time
+    canSendPostRequest = false;
+    const xhr = new XMLHttpRequest();
+    xhr.onload = function () {
+      if (xhr.readyState !== XMLHttpRequest.DONE) {
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        canSendPostRequest = true;
+      } else {
+        stopSendingLogs();
+      }
+    };
+    xhr.onerror = stopSendingLogs;
+    xhr.ontimeout = stopSendingLogs;
+    xhr.open("POST", fallbackHttpUrl + "/" + token);
+    xhr.send(data);
+    function stopSendingLogs() {
+      // TODO: retry after exponential backoff?
+      logQueue.length = 0;
+      sendLog = () => {};
+      spyRemovers.forEach((cb) => cb());
+      spyRemovers.length = 0;
+    }
   }
 
   window.__RX_PLAYER_DEBUG_MODE__ = true;
