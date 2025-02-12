@@ -82,6 +82,11 @@ function init(currentScriptSrc, playerClass, silent) {
   const TARGET_POST_INTERVAL_MS = 2000;
 
   /**
+   * Set to `true` if we fallbacked to using HTTP POST requests due to a
+   * WebSocket issue.
+   */
+  let hasFallbackedToPostRequests = false;
+  /**
    * If we fallbacked to HTTP POST instead of a WebSocket, this value is the
    * result of a `performance.now` call at the time the last HTTP POST was
    * performed.
@@ -593,6 +598,10 @@ function init(currentScriptSrc, playerClass, silent) {
    * Just fallback to HTTP POST requests.
    */
   function onWebSocketError() {
+    if (hasFallbackedToPostRequests) {
+      return;
+    }
+    hasFallbackedToPostRequests = true;
     canSendPostRequest = true;
 
     let nextBody = [];

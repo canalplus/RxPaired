@@ -122,7 +122,6 @@ export default async function RxPairedServer(options: ParsedOptions) {
             throw new Error("Body sent through HTTP POST should be an array");
           }
         } catch (err) {
-          console.warn("!!!", body);
           writeLog(
             "warn",
             "Received HTTP POST with invalid body: " +
