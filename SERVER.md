@@ -702,9 +702,9 @@ In that scenario, URLs stay the same, but with the following API changes:
   potential HTTP redirections) or if the request does not end succesfully due to
   any error, the device should abort sending logs in its current session.
 
-- A single HTTP POST request can transport multiple messages at once (in
-  chronological order). To allow separation of such messages, a NULL byte
-  (`\0` C-style escape sequence) is inserted between messages.
+- A single HTTP POST request can transport multiple messages at once.
+  To allow separation of such messages, the device should always send them as a
+  JSON Array, in chronological order (older first).
 
 - The so-called **Initial Message** sent by the device is only sent once by a
   device through a given "session": only the first HTTP POST request linked to

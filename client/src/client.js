@@ -618,7 +618,6 @@ function init(currentScriptSrc, playerClass, silent) {
         );
         return;
       }
-      // Use NUL byte as separator, why not?
       const toSend = "[" + nextBody.join(",") + "]";
       nextBody.length = 0;
       lastHttpPostTimestamp = performance.now();
