@@ -62,8 +62,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
 
   const server = createServer(function (req, response) {
     if (req.method === "POST") {
-      let unparsedBody = "";
-      const messages: string[] = [];
+      let body = "";
       const metadata = checkNewDeviceConnection(req);
       if (metadata === null) {
         response.writeHead(403, {
@@ -113,20 +112,31 @@ export default async function RxPairedServer(options: ParsedOptions) {
         },
       };
       req.on("data", function (data) {
-        unparsedBody += data;
-        while (true) {
-          const indexOfNul = unparsedBody.indexOf("\0");
-          if (indexOfNul === -1) {
-            return;
-          }
-          messages.push(unparsedBody.substring(0, indexOfNul));
-          unparsedBody = unparsedBody.substring(indexOfNul + 1);
-        }
+        body += data;
       });
       req.on("end", function () {
-        if (unparsedBody.length > 0) {
-          messages.push(unparsedBody);
-          unparsedBody = "";
+        let messages: string[];
+        try {
+          messages = JSON.parse(body) as string[];
+          if (!Array.isArray(messages)) {
+            throw new Error("Body sent through HTTP POST should be an array");
+          }
+        } catch (err) {
+          console.warn("!!!", body);
+          writeLog(
+            "warn",
+            "Received HTTP POST with invalid body: " +
+              (err instanceof Error ? err.toString() : "Unknown Error"),
+            { address: req.socket.remoteAddress },
+          );
+          response.writeHead(400, {
+            /* eslint-disable @typescript-eslint/naming-convention */
+            "Content-Type": "text/plain",
+            "Access-Control-Allow-Origin": "*",
+            /* eslint-enable @typescript-eslint/naming-convention */
+          });
+          response.end();
+          return;
         }
         for (const message of messages) {
           onNewDeviceMessage(message, {

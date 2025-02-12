@@ -594,6 +594,15 @@ function init(currentScriptSrc, playerClass, silent) {
    */
   function onWebSocketError() {
     canSendPostRequest = true;
+
+    let nextBody = [];
+    if (logQueue.length > 0) {
+      for (const log of logQueue) {
+        nextBody.push(JSON.stringify(log));
+      }
+    }
+    logQueue.length = 0;
+
     try {
       socket.close();
     } catch (_) {}
@@ -610,13 +619,13 @@ function init(currentScriptSrc, playerClass, silent) {
         return;
       }
       // Use NUL byte as separator, why not?
-      const toSend = logQueue.join("\0");
-      logQueue.length = 0;
+      const toSend = "[" + nextBody.join(",") + "]";
+      nextBody.length = 0;
       lastHttpPostTimestamp = performance.now();
       sendAsPost(toSend);
     };
     sendLog = (log) => {
-      logQueue.push(log);
+      nextBody.push(JSON.stringify(log));
       checkIfLogsShouldBeSent();
     };
     checkIfLogsShouldBeSent();
