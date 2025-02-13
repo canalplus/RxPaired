@@ -72,13 +72,14 @@ function init(currentScriptSrc, playerClass, silent) {
   const TARGET_POST_INTERVAL_MS = 2000;
 
   /**
-   * Set to `true` if we fallbacked to using HTTP POST requests due to a
-   * WebSocket issue.
+   * Either set to `"WebSocket"` if we began exchanging messages through
+   * WebSockets, to `"POST"`, if we began exchanging messages through HTTP POST
+   * requests, or to `undefined` if we did not yet begin exchanging messages.
    */
-  let hasFallbackedToPostRequests = false;
+  let currentMode;
 
   /** WebSocket connection used for debugging. */
-  const socket = new WebSocket(wsUrl + "/" + token);
+  let socket;
 
   /** Unsent Log queue used before WebSocket initialization */
   const logQueue = [];
@@ -434,7 +435,25 @@ function init(currentScriptSrc, playerClass, silent) {
     }
   }
 
+  setTimeout(() => {
+    if (currentMode === undefined) {
+      // Still not in WebSocket nor HTTP POST mode -> begin fallbacking to HTTP
+      // POST
+      fallbackToPostRequests();
+    }
+  }, 10000);
+
+  try {
+    socket = new WebSocket(wsUrl + "/" + token);
+  } catch (_) {}
+
+  if (socket === undefined) {
+    fallbackToPostRequests();
+    return;
+  }
+
   socket.addEventListener("open", function () {
+    currentMode = "WebSocket";
     sendLog = (log) => socket.send(log);
     for (const log of logQueue) {
       sendLog(log);
@@ -443,6 +462,12 @@ function init(currentScriptSrc, playerClass, silent) {
   });
 
   socket.addEventListener("error", fallbackToPostRequests);
+  socket.addEventListener("close", () => {
+    if (currentMode === undefined) {
+      // Closing socket before beginning message exchanges, fallback
+      fallbackToPostRequests();
+    }
+  });
 
   socket.addEventListener("message", function (event) {
     if (event == null || event.data == null) {
@@ -574,10 +599,11 @@ function init(currentScriptSrc, playerClass, silent) {
    * Don't do anything if we already fallbacked.
    */
   function fallbackToPostRequests() {
-    if (hasFallbackedToPostRequests) {
+    if (currentMode === "POST") {
+      // We already fallbacked, exit
       return;
     }
-    hasFallbackedToPostRequests = true;
+    currentMode = "POST";
 
     /**
      * Fallback HTTP URL relied on to exchange with the RxPaired server when
@@ -614,7 +640,7 @@ function init(currentScriptSrc, playerClass, silent) {
     let nextBody = [];
 
     try {
-      socket.close();
+      socket?.close();
     } catch (_) {}
 
     // Empty the current log queue that hasn't yet been processed
