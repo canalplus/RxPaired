@@ -23,7 +23,7 @@ const __FORCED_SERVER_URL__ = "";
  *
  */
 
-function init(currentScriptSrc, playerClass) {
+function init(currentScriptSrc, playerClass, silent) {
   let wsUrl = _DEVICE_DEBUGGER_URL_;
   if (__FORCED_SERVER_URL__ !== "") {
     if (/^https?:\/\//i.test(__FORCED_SERVER_URL__)) {
@@ -120,7 +120,9 @@ function init(currentScriptSrc, playerClass) {
     console[meth] = function (...args) {
       const argStr = args.map(processArg).join(" ");
       formatAndSendLog(meth, argStr);
-      return oldConsoleFn.apply(this, args);
+      if (!Boolean(silent)) {
+        return oldConsoleFn.apply(this, args);
+      }
     };
     return function () {
       console[meth] = oldConsoleFn;
@@ -570,7 +572,7 @@ if (document.currentScript !== null) {
   // `playerClass` property inside that function's unique object parameter.
   //
   // If the RxPlayer isn't imported yet, `playerClass` can be set to `null`.
-  window.__RX_INSPECTOR_RUN__ = function run({ url, playerClass }) {
-    init(url, playerClass);
+  window.__RX_INSPECTOR_RUN__ = function run({ url, playerClass, silent }) {
+    init(url, playerClass, silent);
   };
 }
