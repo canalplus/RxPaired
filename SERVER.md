@@ -661,3 +661,67 @@ This token wont be communicated to the device, but:
 
 - The `/!list` route, exposed on the inspector port, will list that token,
   allowing RxPaired-inspectors to listen to it.
+
+#### Fallback to HTTP POST
+
+In the case where WebSocket connections are not supported on the current
+device, the device script might actually rely on HTTP POST instead of a
+WebSocket connection to send messages to the server.
+
+In that scenario, URLs stay the same, but with the following API changes:
+
+- Instead of keeping a WebSocket connection open and sending messages as soon
+  as wanted, a device will here perform multiple HTTP POST requests at a
+  regular interval, each grouping all messages that happened since the last
+  HTTP POST for that same URL.
+
+  That interval should generally happen more often than every 5 seconds so the
+  server may quickly determine whether a device is not relying on a token
+  anymore. If no message have been generated in that interval, the device should
+  just send a request with an empty body to signal that it is still using the
+  given token even though it has no message to send.
+
+  Consequently what we could call a single "session" with a given token is less
+  explicit than when relying on a WebSocket connection. With a WebSocket
+  connection, it can be assumed that a "session" is linked to the WebSocket
+  connection's lifespan. For HTTP POST requests, where there are multiple
+  regular requests, it can be assumed instead that a session is terminated if
+  the device didn't send a message with a given token in at least the last 30
+  seconds (as messages are supposed to be sent by the device every 5 seconds at
+  worst, 30 seconds - we rely on huge margins here - is a good indicator that
+  the device has stopped using the token).
+
+- Only a single HTTP POST request for a given device and token can be in transit
+  at once. If an HTTP POST request hasn't yet answered from the point of view
+  of a device, it should not send any new HTTP POST request until that request's
+  response has been obtained.
+
+  This is to enforce in a very simple way that order between messages is kept.
+
+- If any HTTP POST request does not answer with an HTTP 2xx status code (post
+  potential HTTP redirections) or if the request does not end succesfully due to
+  any error, the device should abort sending logs in its current session.
+
+- A single HTTP POST request can transport multiple messages at once.
+  To allow separation of such messages, the device should always send them as a
+  JSON Array, in chronological order (older first).
+
+- The so-called **Initial Message** sent by the device is only sent once by a
+  device through a given "session": only the first HTTP POST request linked to
+  that session should transport that message.
+
+  If, in what was assumed to be an-already created session, a new **Initial
+  Message** is received from a device, it should be assumed that this is a new
+  session with that token.
+
+- If using the `/!notoken` route, the server will send back the generated token
+  for that connection as a response for that HTTP POST request.
+
+  The client should then use that token for subsequent HTTP POST requests which
+  should thus now be on the `/<TOKEN_ID>` URL.
+
+- In HTTP POST mode, the server doesn't send back any message to the device. As
+  such, instruction evaluation is not an available feature in that mode.
+
+- The server should treat such individual messages received through HTTP POST
+  the same way than through the default WebSocket mode.
