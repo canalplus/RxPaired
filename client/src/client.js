@@ -40,16 +40,6 @@ function init(currentScriptSrc, playerClass, silent) {
   if (wsUrl.length > 0 && wsUrl[wsUrl.length - 1] === "/") {
     wsUrl = wsUrl.substring(0, wsUrl.length - 1);
   }
-  /**
-   * Fallback HTTP URL relied on to exchange with the RxPaired server when
-   * WebSockets are not available.
-   */
-  let fallbackHttpUrl;
-  if (/^wss?:\/\//i.test(wsUrl)) {
-    fallbackHttpUrl = "http" + wsUrl.substring(2);
-  } else {
-    fallbackHttpUrl = wsUrl;
-  }
 
   /** "Token" associated to this device's log. */
   let token = __FORCED_TOKEN__;
@@ -86,20 +76,6 @@ function init(currentScriptSrc, playerClass, silent) {
    * WebSocket issue.
    */
   let hasFallbackedToPostRequests = false;
-  /**
-   * If we fallbacked to HTTP POST instead of a WebSocket, this value is the
-   * result of a `performance.now` call at the time the last HTTP POST was
-   * performed.
-   */
-  let lastHttpPostTimestamp = 0;
-  /**
-   * If we fallbacked to HTTP POST instead of a WebSocket, this value is set
-   * to the timeout id (as returned by `setTimeout`) which will trigger an HTTP
-   * POST. Set to `null` if no such timeout is set right now.
-   */
-  let postponedPostTimeout = null;
-  /** Set to `true` when an HTTP POST request can be sent to send logs */
-  let canSendPostRequest = false;
 
   /** WebSocket connection used for debugging. */
   const socket = new WebSocket(wsUrl + "/" + token);
@@ -466,8 +442,7 @@ function init(currentScriptSrc, playerClass, silent) {
     logQueue.length = 0;
   });
 
-  socket.addEventListener("error", onWebSocketError);
-  socket.addEventListener("close", onWebSocketError);
+  socket.addEventListener("error", fallbackToPostRequests);
 
   socket.addEventListener("message", function (event) {
     if (event == null || event.data == null) {
@@ -594,17 +569,55 @@ function init(currentScriptSrc, playerClass, silent) {
   }
 
   /**
-   * Actions taken when the WebSocket connection fails.
-   * Just fallback to HTTP POST requests.
+   * Fallback from the default WebSocket-based message exchange protocol, to the
+   * HTTP POST one.
+   * Don't do anything if we already fallbacked.
    */
-  function onWebSocketError() {
+  function fallbackToPostRequests() {
     if (hasFallbackedToPostRequests) {
       return;
     }
     hasFallbackedToPostRequests = true;
-    canSendPostRequest = true;
 
+    /**
+     * Fallback HTTP URL relied on to exchange with the RxPaired server when
+     * WebSockets are not available.
+     */
+    let fallbackHttpUrl;
+    if (/^wss?:\/\//i.test(wsUrl)) {
+      fallbackHttpUrl = "http" + wsUrl.substring(2);
+    } else {
+      fallbackHttpUrl = wsUrl;
+    }
+
+    /** Set to `true` when an HTTP POST request can be sent to send logs */
+    let canSendPostRequest = true;
+
+    /**
+     * If we fallbacked to HTTP POST instead of a WebSocket, this value is the
+     * result of a `performance.now` call at the time the last HTTP POST was
+     * performed.
+     */
+    let lastHttpPostTimestamp = 0;
+
+    /**
+     * If we fallbacked to HTTP POST instead of a WebSocket, this value is set
+     * to the timeout id (as returned by `setTimeout`) which will trigger an HTTP
+     * POST. Set to `null` if no such timeout is set right now.
+     */
+    let postponedPostTimeout = null;
+
+    /**
+     * JSON-escaped strings for all logs that should be sent in the
+     * next POST request.
+     */
     let nextBody = [];
+
+    try {
+      socket.close();
+    } catch (_) {}
+
+    // Empty the current log queue that hasn't yet been processed
     if (logQueue.length > 0) {
       for (const log of logQueue) {
         nextBody.push(JSON.stringify(log));
@@ -612,82 +625,89 @@ function init(currentScriptSrc, playerClass, silent) {
     }
     logQueue.length = 0;
 
-    try {
-      socket.close();
-    } catch (_) {}
-    const postLogsInBulk = () => {
-      if (postponedPostTimeout !== null) {
-        clearTimeout(postponedPostTimeout);
-        postponedPostTimeout = null;
-      }
-      if (!canSendPostRequest) {
-        postponedPostTimeout = setTimeout(
-          postLogsInBulk,
-          TARGET_POST_INTERVAL_MS,
-        );
-        return;
-      }
-      const toSend = "[" + nextBody.join(",") + "]";
-      nextBody.length = 0;
-      lastHttpPostTimestamp = performance.now();
-      sendAsPost(toSend);
-    };
     sendLog = (log) => {
       nextBody.push(JSON.stringify(log));
-      checkIfLogsShouldBeSent();
+      scheduleNextPostRequest();
     };
-    checkIfLogsShouldBeSent();
-    function checkIfLogsShouldBeSent() {
+
+    scheduleNextPostRequest();
+
+    /**
+     * Send stored logs if the last request was judged to be enough time ago,
+     * else, await some time before doing so.
+     *
+     * This function may be called multiple times without risks of conflicts.
+     */
+    function scheduleNextPostRequest() {
       const now = performance.now();
       if (now - lastHttpPostTimestamp >= TARGET_POST_INTERVAL_MS) {
-        postLogsInBulk();
+        sendLogsWhenReady();
       } else {
         if (postponedPostTimeout !== null) {
           clearTimeout(postponedPostTimeout);
           postponedPostTimeout = null;
         }
         postponedPostTimeout = setTimeout(
-          postLogsInBulk,
+          sendLogsWhenReady,
           TARGET_POST_INTERVAL_MS,
         );
       }
     }
+
+    /**
+     * Send awaiting logs if the last POST request succeeded.
+     */
+    function sendLogsWhenReady() {
+      if (postponedPostTimeout !== null) {
+        clearTimeout(postponedPostTimeout);
+        postponedPostTimeout = null;
+      }
+      if (!canSendPostRequest) {
+        postponedPostTimeout = setTimeout(
+          sendLogsWhenReady,
+          TARGET_POST_INTERVAL_MS,
+        );
+        return;
+      }
+
+      const data = "[" + nextBody.join(",") + "]";
+      nextBody.length = 0;
+      lastHttpPostTimestamp = performance.now();
+      // As a poor man's request ordering algorithm, we only send POST one at a time
+      canSendPostRequest = false;
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        if (xhr.readyState !== XMLHttpRequest.DONE) {
+          return;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // When HTTP POSTing in !notoken mode, we're supposed to
+          // update the token for subsequent requests with the response
+          if (token === "!notoken" || token.substring(0, 9) === "!notoken/") {
+            token = xhr.response;
+          }
+          canSendPostRequest = true;
+        } else {
+          // TODO: retry after exponential backoff?
+          abort();
+        }
+      };
+      // TODO: retry after exponential backoff?
+      xhr.onerror = abort;
+      xhr.ontimeout = abort;
+      xhr.open("POST", fallbackHttpUrl + "/" + token);
+      xhr.send(data);
+    }
   }
 
   /**
-   * Send given logging data as an HTTP POST request.
-   * @param {string} data
+   * Remove mocked functions and free taken resources.
    */
-  function sendAsPost(data) {
-    // As a poor man's request ordering algorithm, we only send POST one at a time
-    canSendPostRequest = false;
-    const xhr = new XMLHttpRequest();
-    xhr.onload = function () {
-      if (xhr.readyState !== XMLHttpRequest.DONE) {
-        return;
-      }
-      if (xhr.status >= 200 && xhr.status < 300) {
-        // When HTTP POSTing in !notoken mode, we're supposed to
-        // update the token for subsequent requests with the response
-        if (token === "!notoken" || token.substring(0, 9) === "!notoken/") {
-          token = xhr.response;
-        }
-        canSendPostRequest = true;
-      } else {
-        stopSendingLogs();
-      }
-    };
-    xhr.onerror = stopSendingLogs;
-    xhr.ontimeout = stopSendingLogs;
-    xhr.open("POST", fallbackHttpUrl + "/" + token);
-    xhr.send(data);
-    function stopSendingLogs() {
-      // TODO: retry after exponential backoff?
-      logQueue.length = 0;
-      sendLog = () => {};
-      spyRemovers.forEach((cb) => cb());
-      spyRemovers.length = 0;
-    }
+  function abort() {
+    logQueue.length = 0;
+    sendLog = () => {};
+    spyRemovers.forEach((cb) => cb());
+    spyRemovers.length = 0;
   }
 
   window.__RX_PLAYER_DEBUG_MODE__ = true;
