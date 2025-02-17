@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.0 (2024-02-17)
+
+### Features
+
+- Fallback to POST requests if WebSockets are not available [#27]
+- client: Add optional `silent` argument to client script to not output logs in console [#20]
+- Also report uncatched global error and unhandled Promises [#21]
+
+### Bug fixes
+
+- server: Actually read the `--log-file` option [#23]
+- inspector: Do not parse the `Init` log as a regular log which have led to a red banner [#19]
+
 ## v0.1.11 (2024-03-12)
 
 ### Features
