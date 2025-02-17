@@ -391,7 +391,7 @@ function init(currentScriptSrc, playerClass, silent) {
         return JSON.stringify(decycle(val));
       } catch (err2) {
         const message =
-          err2 != cycle && typeof err2.message === "string"
+          err2 != null && typeof err2.message === "string"
             ? err2.message
             : "undefined error";
         // Should not happen, but still...
