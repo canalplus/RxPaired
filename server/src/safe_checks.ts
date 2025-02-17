@@ -88,7 +88,9 @@ export default function createCheckers(
         i--; // We removed i, so we now need to re-check what is at its place for
         // the next loop iteration
         if (tokenInfo.device !== null) {
-          tokenInfo.device.close();
+          if (tokenInfo.device.type === "websocket") {
+            tokenInfo.device.value.close();
+          }
           tokenInfo.device = null;
         }
         while (tokenInfo.inspectors.length > 0) {
