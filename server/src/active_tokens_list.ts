@@ -179,29 +179,7 @@ export class TokenMetadata {
    *
    * There cannot be multiple devices connected with the same token.
    */
-  public device: /** There is no device linked to that token is. */
-  | null
-    /** The device linked to that token is maintaining a WebSocket connection. */
-    | {
-        type: "websocket";
-        value: WebSocket.WebSocket;
-      }
-    /** The device linked to that token is sending logs through HTTP POST. */
-    | {
-        type: "http";
-        value: {
-          /**
-           * Value of `performance.now()` the last time a device sent logs with
-           * that token.
-           */
-          lastConnectionTimestamp: number;
-          /**
-           * Return value of the `setInterval` maintained to check that that
-           * token seem still in usage.
-           */
-          checkAliveIntervalId: NodeJS.Timer;
-        };
-      };
+  public device: DeviceInfo | null;
 
   /**
    * Store Timer ID of the interval at which `"ping"` messages are sent to the
@@ -342,3 +320,31 @@ export enum TokenType {
    */
   FromDevice,
 }
+
+export type DeviceInfo =
+  /** The device linked to that token is maintaining a WebSocket connection. */
+  | {
+      type: "websocket";
+      value: WebSocket.WebSocket;
+    }
+  /** The device linked to that token is sending logs through HTTP POST. */
+  | {
+      type: "http";
+      value: {
+        /**
+         * Value of `performance.now()` the first time a device sent logs with
+         * that token under the current session.
+         */
+        firstConnectionTimestamp: number;
+        /**
+         * Value of `performance.now()` the last time a device sent logs with
+         * that token under the current session.
+         */
+        lastConnectionTimestamp: number;
+        /**
+         * Return value of the `setInterval` maintained to check that that
+         * token seem still in usage.
+         */
+        checkAliveIntervalId: NodeJS.Timer;
+      };
+    };
