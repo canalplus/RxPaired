@@ -11,17 +11,19 @@ Then in the root directory, open a terminal and type:
 npm install
 ```
 
-If not already done, you have to create a `.npmrc` file in the root directory.
-You can base yourself on the `.npmrc.sample` file:
+If not already done, you have to create a `rx-paired.config.json` file in the root
+directory.
+You can base yourself on the `rx-paired.config.example.json` file:
 
 ```sh
 # in root directory
-cp .npmrc.sample .npmrc
+cp rx-paired.config.example.json rx-paired.config.json
 ```
 
-### The `device_debugger_url`
+### The `deviceDebuggerUrl`
 
-In that new `.npmrc` file, you'll need to set one URL: the `device_debugger_url`.
+In that new `rx-paired.config.json` file, you'll need to set one URL: the
+`deviceDebuggerUrl`.
 
 This will be the WebSocket address `RxPaired-server` is listening to for
 `RxPaired-client` connections and messages.

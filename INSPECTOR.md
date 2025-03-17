@@ -11,17 +11,18 @@ Then go to this directory on a terminal, and type:
 npm install
 ```
 
-If not already done, you have to create a `.npmrc` file in the root directory.
-You can base yourself on the `.npmrc.sample` file:
+If not already done, you have to create a `rx-paired.config.json` file in the root
+directory.
+You can base yourself on the `rx-paired.config.example.json` file:
 
 ```sh
 # in root directory
-cp .npmrc.sample .npmrc
+cp rx-paired.config.example.json rx-paired.config.json
 ```
 
-In that new `.npmrc` file, you'll need to set two URLs:
+In that new `rx-paired.config.json` file, you'll need to set two URLs:
 
-1. `inspector_debugger_url`:
+1. `inspectorDebuggerUrl`:
 
    This will be the WebSocket address `RxPaired-server` is listening to for
    `RxPaired-inspector` connections.
@@ -36,7 +37,7 @@ In that new `.npmrc` file, you'll need to set two URLs:
    (to make the `RxPaired-Client` runnable in HTTPS pages).
    There, you might need to update this value to the actual HTTPS URL used.
 
-2. `device_script_url`:
+2. `deviceScriptUrl`:
 
    This is the URL the `RxPaired-Client` (the script that will be deployed to devices)
    is available at.
