@@ -4,6 +4,7 @@ import process from "process";
 import { fileURLToPath } from "url";
 import WebSocket, { WebSocketServer } from "ws";
 import ActiveTokensList, {
+  DeviceInfo,
   TokenMetadata,
   TokenType,
 } from "./active_tokens_list.js";
@@ -74,7 +75,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
         response.end();
         return;
       }
-      const { tokenId, logFileName, tokenMetadata } = metadata;
+      const { tokenId, tokenMetadata } = metadata;
       writeLog("log", "Received authorized device HTTP connection", {
         address: req.socket.remoteAddress,
         tokenId,
@@ -104,13 +105,29 @@ export default async function RxPairedServer(options: ParsedOptions) {
         }
       }, 2000);
 
-      tokenMetadata.device = {
+      const now = performance.now();
+      let firstConnectionTimestamp;
+      if (tokenMetadata.device?.type === "http") {
+        firstConnectionTimestamp =
+          tokenMetadata.device.value.firstConnectionTimestamp;
+      } else {
+        firstConnectionTimestamp = now;
+      }
+      const deviceInfo: DeviceInfo = {
         type: "http",
         value: {
-          lastConnectionTimestamp: performance.now(),
+          firstConnectionTimestamp,
+          lastConnectionTimestamp: now,
           checkAliveIntervalId,
         },
       };
+      tokenMetadata.device = deviceInfo;
+      const logFileName = getLogFileName(
+        req,
+        tokenMetadata.tokenId,
+        deviceInfo,
+      );
+
       req.on("data", function (data) {
         body += data;
       });
@@ -180,7 +197,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
       ws.close();
       return;
     }
-    const { tokenId, logFileName, tokenMetadata } = connectionMetadata;
+    const { tokenId, tokenMetadata } = connectionMetadata;
     checkers.checkNewDeviceLimit();
 
     writeLog("log", "Received authorized device WebSocket connection", {
@@ -188,10 +205,12 @@ export default async function RxPairedServer(options: ParsedOptions) {
       tokenId,
     });
 
-    tokenMetadata.device = {
+    const deviceInfo: DeviceInfo = {
       type: "websocket",
       value: ws,
     };
+    tokenMetadata.device = deviceInfo;
+    const logFileName = getLogFileName(req, tokenMetadata.tokenId, deviceInfo);
     tokenMetadata.pingInterval = setInterval(() => {
       ws.send("ping");
     }, 10000);
@@ -526,7 +545,6 @@ export default async function RxPairedServer(options: ParsedOptions) {
   function checkNewDeviceConnection(req: IncomingMessage): null | {
     tokenId: string;
     tokenMetadata: TokenMetadata;
-    logFileName: string;
   } {
     if (req.url === undefined) {
       return null;
@@ -534,7 +552,6 @@ export default async function RxPairedServer(options: ParsedOptions) {
     let tokenId = req.url.substring(1);
     let existingToken: TokenMetadata;
     let existingTokenIndex: number;
-    let logFileNameSuffix = tokenId;
     if (!options.disableNoToken && tokenId.startsWith("!notoken")) {
       if (options.password !== null) {
         const pw = tokenId.substring("!notoken/".length);
@@ -549,21 +566,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
         }
       }
 
-      const address = req.socket.remoteAddress;
-      if (address !== undefined && address !== "") {
-        // Strip last part of address for fear of GDPR compliancy?
-        const lastDotIdx = address.lastIndexOf(".");
-        if (lastDotIdx > 0) {
-          logFileNameSuffix = address.substring(0, lastDotIdx);
-        } else {
-          const lastColonIdx = address.lastIndexOf(":");
-          if (lastColonIdx > 0) {
-            logFileNameSuffix = address.substring(0, lastColonIdx);
-          }
-        }
-      }
       tokenId = generatePassword();
-      logFileNameSuffix += `-${tokenId}`;
       existingToken = activeTokensList.create(
         TokenType.FromDevice,
         tokenId,
@@ -605,11 +608,9 @@ export default async function RxPairedServer(options: ParsedOptions) {
         device.value.close();
       }
     }
-    const logFileName = getLogFileName(logFileNameSuffix);
     return {
       tokenId,
       tokenMetadata: existingToken,
-      logFileName,
     };
   }
 
@@ -736,10 +737,6 @@ function sendMessageToInspector(
   }
 }
 
-function getLogFileName(tokenId: string): string {
-  return "logs-" + new Date().toISOString() + "-" + tokenId + ".txt";
-}
-
 interface EvalMessage {
   type: "eval";
   value: {
@@ -838,4 +835,47 @@ function parseInspectorUrl(
     command,
     expirationDelay,
   };
+}
+
+/**
+ * Construct filename for the logs associated to the given request and token.
+ * @param req - Incoming request
+ * @param tokenId - Token id linked to that request
+ * @param deviceInfo - Information on the way the device is connected
+ * @returns - The filename where logs from that device should be stored.
+ */
+function getLogFileName(
+  req: IncomingMessage,
+  tokenId: string,
+  deviceInfo: DeviceInfo,
+): string {
+  let logFileNameSuffix = tokenId;
+  const address = req.socket.remoteAddress;
+  if (address !== undefined && address !== "") {
+    // Strip last part of address for fear of GDPR compliancy?
+    const lastDotIdx = address.lastIndexOf(".");
+    if (lastDotIdx > 0) {
+      logFileNameSuffix = address.substring(0, lastDotIdx);
+    } else {
+      const lastColonIdx = address.lastIndexOf(":");
+      if (lastColonIdx > 0) {
+        logFileNameSuffix = address.substring(0, lastColonIdx);
+      }
+    }
+  }
+
+  // Devices connected through the HTTP POST mechanisms perform multiple
+  // requests where the log file should be shared.
+  const timestamp =
+    deviceInfo.type === "http"
+      ? deviceInfo.value.firstConnectionTimestamp
+      : undefined;
+
+  return (
+    "logs-" +
+    (timestamp !== undefined ? new Date(timestamp) : new Date()).toISOString() +
+    "-" +
+    logFileNameSuffix +
+    ".txt"
+  );
 }
