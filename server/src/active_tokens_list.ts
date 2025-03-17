@@ -170,7 +170,7 @@ export class TokenMetadata {
      * ensure the connection isn't closed by some mechanism (for example a
      * server watcher closing down the connection when it seems to be unused).
      */
-    pingInterval: NodeJS.Timer;
+    pingInterval: ReturnType<typeof setInterval>;
   }>;
 
   /**
@@ -186,7 +186,7 @@ export class TokenMetadata {
    * device to ensure the connection isn't closed by some mechanism (for example
    * a server watcher closing down the connection when it seems to be unused).
    */
-  public pingInterval: NodeJS.Timer | null;
+  public pingInterval: ReturnType<typeof setInterval> | null;
 
   /**
    * Initialization data received when the device connected with this
@@ -345,6 +345,6 @@ export type DeviceInfo =
          * Return value of the `setInterval` maintained to check that that
          * token seem still in usage.
          */
-        checkAliveIntervalId: NodeJS.Timer;
+        checkAliveIntervalId: ReturnType<typeof setInterval>;
       };
     };

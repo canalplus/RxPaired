@@ -1,6 +1,6 @@
 {
   "name": "rx-paired-inspector",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Web inspector interface for RxPaired: the lightweight, RxPlayer-oriented, remote inspector",
   "main": "inspector.js",
   "scripts": {
@@ -15,11 +15,11 @@
     "serve": "node ../utils/static_http_server.mjs --include-inspector-files"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "6.2.1",
-    "eslint": "8.46.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-import": "2.28.0",
-    "eslint-plugin-jsdoc": "46.4.5"
+    "@typescript-eslint/eslint-plugin": "8.26.1",
+    "eslint": "9.22.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-import": "2.31.0",
+    "eslint-plugin-jsdoc": "50.6.7"
   },
   "author": "peaberberian",
   "license": "MIT"
