@@ -97,15 +97,13 @@ function init(currentScriptSrc, playerClass, silent) {
   };
 
   /**
-   * Add "formatting" to a log message (timestamp and namespace) and send it to
-   * RxPaired's server.
-   * @param {string} namespace - The "namespace" of the log
+   * Send specific Network-related log with the right format.
    * @param {string} log - The log message.
    */
-  function formatAndSendLog(namespace, log) {
+  function sendNetworkLog(log) {
     const time = performance.now().toFixed(2);
-    const logText = `${time} [${namespace}] ${log}`;
-    sendLog(logText);
+    const logText = `${time} [Network] ${log}`;
+    return sendLog(logText);
   }
 
   function processArg(arg) {
@@ -151,9 +149,22 @@ function init(currentScriptSrc, playerClass, silent) {
 
   const spyRemovers = ["log", "error", "info", "warn", "debug"].map((meth) => {
     const oldConsoleFn = console[meth];
+    const namespace = `[${meth}]`;
     console[meth] = function (...args) {
       const argStr = args.map(processArg).join(" ");
-      formatAndSendLog(meth, argStr);
+
+      // The RxPlayer might already have set the timestamp + namespace format
+      if (
+        args.length >= 3 &&
+        args[1] === namespace &&
+        /^\d+\.\d+$/.test(args[0])
+      ) {
+        sendLog(argStr);
+      } else {
+        // Else, add it now
+        const time = performance.now().toFixed(2);
+        sendLog(`${time} ${namespace} ${argStr}`);
+      }
       if (!Boolean(silent)) {
         return oldConsoleFn.apply(this, args);
       }
@@ -183,20 +194,19 @@ function init(currentScriptSrc, playerClass, silent) {
         return originalXhrOpen.apply(this, arguments);
       }
       this.addEventListener("load", function () {
-        formatAndSendLog(
-          "Network",
+        sendNetworkLog(
           `Loaded ${method} XHR from: ${url} ` + `(status: ${this.status})`,
         );
       });
       this.addEventListener("error", function () {
-        formatAndSendLog("Network", `Errored ${method} XHR from: ${url}`);
+        sendNetworkLog(`Errored ${method} XHR from: ${url}`);
       });
       this.abort = function () {
-        formatAndSendLog("Network", `Aborted ${method} XHR from: ${url}`);
+        sendNetworkLog(`Aborted ${method} XHR from: ${url}`);
         return XMLHttpRequest.prototype.abort.apply(this, arguments);
       };
       this.send = function () {
-        formatAndSendLog("Network", `Sending ${method} XHR to: ${url}`);
+        sendNetworkLog(`Sending ${method} XHR to: ${url}`);
         return XMLHttpRequest.prototype.send.apply(this, arguments);
       };
       return originalXhrOpen.apply(this, arguments);
@@ -234,21 +244,17 @@ function init(currentScriptSrc, playerClass, silent) {
       } else {
         method = "GET";
       }
-      formatAndSendLog("Network", `Sending ${method} fetch to: ${url}`);
+      sendNetworkLog(`Sending ${method} fetch to: ${url}`);
       const realFetch = originalFetch.apply(this, arguments);
       return realFetch.then(
         (res) => {
-          formatAndSendLog(
-            "Network",
+          sendNetworkLog(
             `Loaded ${method} fetch from: ${url} ` + `(status: ${res.status})`,
           );
           return res;
         },
         (err) => {
-          formatAndSendLog(
-            "Network",
-            `Errored/Aborted ${method} fetch from: ${url}`,
-          );
+          sendNetworkLog(`Errored/Aborted ${method} fetch from: ${url}`);
           throw err;
         },
       );
