@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1 (2024-03-17)
+
+### Bug fixes
+
+- server: Fix log file being created each time an HTTP POST is received [#28]
+- client: Remove occurences of "double-formatting" when RxPlayer's `LogFormat` property is set to `"full"` [#25]
+
 ## v0.2.0 (2024-02-17)
 
 ### Features
