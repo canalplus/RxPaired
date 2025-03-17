@@ -1,6 +1,6 @@
 {
   "name": "rx-paired",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": " A very lightweight, RxPlayer-specialized, remote inspector ",
   "type": "module",
   "main": "./rx-paired.mjs",
