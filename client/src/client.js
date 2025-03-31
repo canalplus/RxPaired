@@ -758,6 +758,7 @@ function init(currentScriptSrc, playerClass, silent) {
     // Try to force the RxPlayer to redefine its console function.
     // May break at any time.
     playerClass.LogLevel = "DEBUG";
+    playerClass.LogFormat = "full";
   }
 }
 
