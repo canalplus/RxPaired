@@ -1,6 +1,6 @@
 {
   "name": "rx-paired-server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Server for RxPaired: the lightweight, RxPlayer-oriented, remote inspector",
   "main": "./build/main.js",
   "type": "module",

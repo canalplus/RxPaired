@@ -289,6 +289,17 @@ function init(currentScriptSrc, playerClass, silent) {
   }
 
   /**
+   * Send log with the given namespace and log message in the right format for
+   * the RxPaired server.
+   * @param {string} namespace
+   * @param {string} log
+   */
+  function formatAndSendLog(namespace, log) {
+    const time = performance.now().toFixed(2);
+    sendLog(`${time} [${namespace}] ${log}`);
+  }
+
+  /**
    * Creates a string from the given Uint8Array containing utf-8 code units.
    * @param {Uint8Array} bytes
    * @returns {string}

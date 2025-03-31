@@ -1,6 +1,6 @@
 {
-  "__DESCRIPTION__inspectorUrl": "URL used for communications between the web inspector and the server. It must include the protocol (e.g. \"http\"), which must be one of the following values: http, https, ws, wss",
-  "inspectorUrl": "ws://127.0.0.1:22625",
+  "__DESCRIPTION__inspectorDebuggerUrl": "URL used for communications between the web inspector and the server. It must include the protocol (e.g. \"http\"), which must be one of the following values: http, https, ws, wss",
+  "inspectorDebuggerUrl": "ws://127.0.0.1:22625",
 
   "__DESCRIPTION__deviceDebuggerUrl": "URL used for communications between the device and the server (e.g. for logs). It must include the protocol (e.g. \"http\"), which must be one of the following values: http, https, ws, wss",
   "deviceDebuggerUrl": "ws://127.0.0.1:22626",
