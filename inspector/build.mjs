@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "fs";
 import path from "path";
 import process from "process";
 import { fileURLToPath } from "url";
@@ -10,27 +11,64 @@ const currentDirName = getCurrentDirectoryName();
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // The script has been run directly
 
-  if (
-    typeof process.env.npm_config_inspector_debugger_url !== "string" ||
-    typeof process.env.npm_config_device_script_url !== "string"
-  ) {
+  let configFile;
+  try {
+    configFile = readFileSync("./rx-paired.config.json");
+  } catch (err1) {
+    if (err1.code === "ENOENT") {
+      try {
+        configFile = readFileSync(
+          path.join(currentDirName, "..", "rx-paired.config.json"),
+        );
+      } catch (err2) {
+        if (err2.code === "ENOENT") {
+          console.error("ERROR: Config file not found.");
+          console.error(
+            'Please create a file named "rx-paired.config.json" first in either the root directory of the project or in the current working directory. You can take "rx-player.config.example.json" as an example of what this configuration file should contain.',
+          );
+        } else {
+          console.error(
+            "ERROR: Failed to open configuration file: " + err2.toString(),
+          );
+        }
+        process.exit(1);
+      }
+    } else {
+      console.error(
+        "ERROR: Failed to open configuration file: " + err1.toString(),
+      );
+      process.exit(1);
+    }
+  }
+
+  let configFileJson;
+  try {
+    configFileJson = JSON.parse(configFile);
+  } catch (err) {
     console.error(
-      "Error: Invalid environment variable(s)." +
-        "\n" +
-        "Please make sure that you:\n" +
-        `  1. Declared an ".npmrc" file in the "${currentDirName}" directory based on ` +
-        "the content of the following file: " +
-        path.join(currentDirName, ".npmrc.sample") +
-        ".\n" +
-        "  2. Called this script through an npm script command (e.g. npm run *script*).",
+      "ERROR: Failed to parse configuration file: " + err.toString(),
     );
     process.exit(1);
   }
 
-  let inspectorDebuggerUrl = process.env.npm_config_inspector_debugger_url;
+  let inspectorDebuggerUrl = configFileJson.inspectorDebuggerUrl;
+  if (typeof inspectorDebuggerUrl !== "string") {
+    console.error("Error: Invalid `inspectorDebuggerUrl` configuration.");
+    if (!configFileJson.hasOwnProperty("inspectorDebuggerUrl")) {
+      console.error('"inspectorDebuggerUrl" not defined');
+    } else {
+      console.error(
+        'Expected type: "string"\n' +
+          'Actual type: "' +
+          typeof inspectorDebuggerUrl +
+          '"',
+      );
+    }
+    process.exit(1);
+  }
   if (!/^(http|ws)s?:\/\//.test(inspectorDebuggerUrl)) {
     console.error(
-      "Error: Invalid inspector_debugger_url." +
+      'ERROR: Invalid "inspectorDebuggerUrl" property.' +
         "\n" +
         "Please make sure that this url uses either the http, https, ws or wss.",
     );
@@ -40,7 +78,21 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     inspectorDebuggerUrl = "ws" + inspectorDebuggerUrl.slice(4);
   }
 
-  const deviceScriptUrl = process.env.npm_config_device_script_url;
+  let deviceScriptUrl = configFileJson.deviceScriptUrl;
+  if (typeof deviceScriptUrl !== "string") {
+    console.error("Error: Invalid `deviceScriptUrl` configuration.");
+    if (!configFileJson.hasOwnProperty("deviceScriptUrl")) {
+      console.error('"deviceScriptUrl" not defined');
+    } else {
+      console.error(
+        'Expected type: "string"\n' +
+          'Actual type: "' +
+          typeof deviceScriptUrl +
+          '"',
+      );
+    }
+    process.exit(1);
+  }
 
   const { argv } = process;
   if (argv.includes("-h") || argv.includes("--help")) {

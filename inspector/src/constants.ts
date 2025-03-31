@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-/** @see .npmrc file */
+/** @see `rx-paired.config.json` file */
 declare const _INSPECTOR_DEBUGGER_URL_: string;
 declare const __DEVICE_SCRIPT_URL__: string;
 declare const __DISABLE_PASSWORD__: boolean;
