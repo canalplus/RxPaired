@@ -22,9 +22,8 @@ export enum UPDATE_TYPE {
   REPLACE = "replace",
 }
 
-/* eslint-disable @typescript-eslint/no-empty-interface */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type, @typescript-eslint/no-empty-interface
 interface Empty {}
-/* eslint-enable @typescript-eslint/no-empty-interface */
 
 /**
  * Type for state listeners, which listen to any of the `ObservableState`'s

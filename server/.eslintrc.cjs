@@ -18,6 +18,13 @@ module.exports = {
     "@typescript-eslint",
   ],
   rules: {
+    "@typescript-eslint/no-duplicate-type-constituents": [
+      "error",
+      {
+        ignoreIntersections: false,
+        ignoreUnions: true,
+      },
+    ],
     "@typescript-eslint/adjacent-overload-signatures": "error",
     "@typescript-eslint/array-type": [
       "error",
@@ -39,19 +46,6 @@ module.exports = {
       "off",
       {
         accessibility: "explicit",
-      },
-    ],
-    "@typescript-eslint/member-delimiter-style": [
-      "error",
-      {
-        multiline: {
-          delimiter: "semi",
-          requireLast: true,
-        },
-        singleline: {
-          delimiter: "semi",
-          requireLast: false,
-        },
       },
     ],
     "@typescript-eslint/naming-convention": [
@@ -132,13 +126,15 @@ module.exports = {
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
+        args: "all",
         argsIgnorePattern: "^_",
+        caughtErrors: "none",
+        destructuredArrayIgnorePattern: "^_",
         varsIgnorePattern: "^_",
       },
     ],
     "@typescript-eslint/no-shadow": ["error"],
     "@typescript-eslint/restrict-plus-operands": "error",
-    "@typescript-eslint/semi": ["error", "always"],
     "@typescript-eslint/strict-boolean-expressions": "error",
     "@typescript-eslint/triple-slash-reference": [
       "error",

@@ -4,7 +4,6 @@ module.exports = {
     es6: true,
   },
   extends: [
-    "prettier",
     "plugin:@typescript-eslint/recommended",
     "plugin:@typescript-eslint/recommended-requiring-type-checking",
   ],
@@ -19,6 +18,13 @@ module.exports = {
     "@typescript-eslint",
   ],
   rules: {
+    "@typescript-eslint/no-duplicate-type-constituents": [
+      "error",
+      {
+        ignoreIntersections: false,
+        ignoreUnions: true,
+      },
+    ],
     "@typescript-eslint/adjacent-overload-signatures": "error",
     "@typescript-eslint/array-type": [
       "error",
@@ -120,12 +126,14 @@ module.exports = {
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
+        args: "all",
         argsIgnorePattern: "^_",
+        caughtErrors: "none",
+        destructuredArrayIgnorePattern: "^_",
         varsIgnorePattern: "^_",
       },
     ],
     "@typescript-eslint/no-shadow": ["error"],
-    "@typescript-eslint/quotes": ["error", "double", { avoidEscape: true }],
     "@typescript-eslint/restrict-plus-operands": "error",
     "@typescript-eslint/strict-boolean-expressions": "error",
     "@typescript-eslint/triple-slash-reference": [
