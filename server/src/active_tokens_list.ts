@@ -332,10 +332,10 @@ export type DeviceInfo =
       type: "http";
       value: {
         /**
-         * Value of `performance.now()` the first time a device sent logs with
+         * Value of `new Date()` the first time a device sent logs with
          * that token under the current session.
          */
-        firstConnectionTimestamp: number;
+        initialConnectionDate: Date;
         /**
          * Value of `performance.now()` the last time a device sent logs with
          * that token under the current session.

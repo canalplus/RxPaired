@@ -106,17 +106,17 @@ export default async function RxPairedServer(options: ParsedOptions) {
       }, 2000);
 
       const now = performance.now();
-      let firstConnectionTimestamp;
+      let initialConnectionDate: Date;
       if (tokenMetadata.device?.type === "http") {
-        firstConnectionTimestamp =
-          tokenMetadata.device.value.firstConnectionTimestamp;
+        initialConnectionDate =
+          tokenMetadata.device.value.initialConnectionDate;
       } else {
-        firstConnectionTimestamp = now;
+        initialConnectionDate = new Date();
       }
       const deviceInfo: DeviceInfo = {
         type: "http",
         value: {
-          firstConnectionTimestamp,
+          initialConnectionDate,
           lastConnectionTimestamp: now,
           checkAliveIntervalId,
         },
@@ -866,14 +866,14 @@ function getLogFileName(
 
   // Devices connected through the HTTP POST mechanisms perform multiple
   // requests where the log file should be shared.
-  const timestamp =
+  const initialConnectionDate =
     deviceInfo.type === "http"
-      ? deviceInfo.value.firstConnectionTimestamp
+      ? deviceInfo.value.initialConnectionDate
       : undefined;
 
   return (
     "logs-" +
-    (timestamp !== undefined ? new Date(timestamp) : new Date()).toISOString() +
+    (initialConnectionDate ?? new Date()).toISOString() +
     "-" +
     logFileNameSuffix +
     ".txt"
