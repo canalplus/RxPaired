@@ -122,11 +122,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
         },
       };
       tokenMetadata.device = deviceInfo;
-      const logFileName = getLogFileName(
-        req,
-        tokenMetadata.tokenId,
-        deviceInfo,
-      );
+      const logFileName = getLogFileName(tokenMetadata.tokenId, deviceInfo);
 
       req.on("data", function (data) {
         body += data;
@@ -210,7 +206,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
       value: ws,
     };
     tokenMetadata.device = deviceInfo;
-    const logFileName = getLogFileName(req, tokenMetadata.tokenId, deviceInfo);
+    const logFileName = getLogFileName(tokenMetadata.tokenId, deviceInfo);
     tokenMetadata.pingInterval = setInterval(() => {
       ws.send("ping");
     }, 10000);
@@ -839,31 +835,11 @@ function parseInspectorUrl(
 
 /**
  * Construct filename for the logs associated to the given request and token.
- * @param req - Incoming request
  * @param tokenId - Token id linked to that request
  * @param deviceInfo - Information on the way the device is connected
  * @returns - The filename where logs from that device should be stored.
  */
-function getLogFileName(
-  req: IncomingMessage,
-  tokenId: string,
-  deviceInfo: DeviceInfo,
-): string {
-  let logFileNameSuffix = tokenId;
-  const address = req.socket.remoteAddress;
-  if (address !== undefined && address !== "") {
-    // Strip last part of address for fear of GDPR compliancy?
-    const lastDotIdx = address.lastIndexOf(".");
-    if (lastDotIdx > 0) {
-      logFileNameSuffix = address.substring(0, lastDotIdx);
-    } else {
-      const lastColonIdx = address.lastIndexOf(":");
-      if (lastColonIdx > 0) {
-        logFileNameSuffix = address.substring(0, lastColonIdx);
-      }
-    }
-  }
-
+function getLogFileName(tokenId: string, deviceInfo: DeviceInfo): string {
   // Devices connected through the HTTP POST mechanisms perform multiple
   // requests where the log file should be shared.
   const initialConnectionDate =
@@ -875,7 +851,7 @@ function getLogFileName(
     "logs-" +
     (initialConnectionDate ?? new Date()).toISOString() +
     "-" +
-    logFileNameSuffix +
+    tokenId +
     ".txt"
   );
 }
