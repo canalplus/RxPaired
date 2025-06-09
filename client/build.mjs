@@ -51,32 +51,32 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   }
 
-  if (typeof configFileJson.deviceDebuggerUrl !== "string") {
-    console.error("Error: Invalid `deviceDebuggerUrl` configuration.");
-    if (!configFileJson.hasOwnProperty("deviceDebuggerUrl")) {
-      console.error('"deviceDebuggerUrl" not defined');
+  if (typeof configFileJson.serverUrl !== "string") {
+    console.error("Error: Invalid `serverUrl` configuration.");
+    if (!configFileJson.hasOwnProperty("serverUrl")) {
+      console.error('"serverUrl" not defined');
     } else {
       console.error(
         'Expected type: "string"\n' +
           'Actual type: "' +
-          typeof configFileJson.deviceDebuggerUrl +
+          typeof configFileJson.serverUrl +
           '"',
       );
     }
     process.exit(1);
   }
 
-  let deviceDebuggerUrl = configFileJson.deviceDebuggerUrl;
-  if (!/^(http|ws)s?:\/\//.test(deviceDebuggerUrl)) {
+  let serverUrl = configFileJson.serverUrl;
+  if (!/^(http|ws)s?:\/\//.test(serverUrl)) {
     console.error(
-      "Error: Invalid deviceDebuggerUrl." +
+      "Error: Invalid serverUrl." +
         "\n" +
         "Please make sure that this url uses either the http, https, ws or wss.",
     );
     process.exit(1);
   }
-  if (deviceDebuggerUrl.startsWith("http")) {
-    deviceDebuggerUrl = "ws" + deviceDebuggerUrl.slice(4);
+  if (serverUrl.startsWith("http")) {
+    serverUrl = "ws" + serverUrl.slice(4);
   }
 
   const { argv } = process;
@@ -116,7 +116,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     minify: shouldMinify,
     watch: shouldWatch,
     plugins: [consolePlugin],
-    deviceDebuggerUrl,
+    serverUrl,
   }).catch((err) => {
     console.error(
       `\x1b[31m[${getHumanReadableHours()}]\x1b[0m Client build failed:`,
@@ -129,7 +129,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 /**
  * Build the client with the given options.
  * @param {Object} options
- * @param {string} options.deviceDebuggerUrl - URL to contact the RxPaired
+ * @param {string} options.serverUrl - URL to contact the RxPaired
  * server.
  * @param {boolean} [options.minify] - If `true`, the output will be minified.
  * @param {boolean} [options.watch] - If `true`, the files involved
@@ -152,7 +152,7 @@ export default function buildClient(options) {
     legalComments: "inline",
     plugins: options.plugins,
     define: {
-      _DEVICE_DEBUGGER_URL_: JSON.stringify(options.deviceDebuggerUrl),
+      __RX_PAIRED_SERVER_URL__: JSON.stringify(options.serverUrl),
       _BUILD_TIME_TOKEN_VALUE_: JSON.stringify(options.tokenValue ?? null),
     },
   };
