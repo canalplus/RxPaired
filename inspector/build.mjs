@@ -51,32 +51,33 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   }
 
-  let inspectorDebuggerUrl = configFileJson.inspectorDebuggerUrl;
-  if (typeof inspectorDebuggerUrl !== "string") {
-    console.error("Error: Invalid `inspectorDebuggerUrl` configuration.");
-    if (!configFileJson.hasOwnProperty("inspectorDebuggerUrl")) {
-      console.error('"inspectorDebuggerUrl" not defined');
+  let serverUrl = configFileJson.serverUrl;
+  if (typeof serverUrl !== "string") {
+    console.error("Error: Invalid `serverUrl` configuration.");
+    if (!configFileJson.hasOwnProperty("serverUrl")) {
+      console.error('"serverUrl" not defined');
     } else {
       console.error(
-        'Expected type: "string"\n' +
-          'Actual type: "' +
-          typeof inspectorDebuggerUrl +
-          '"',
+        'Expected type: "string"\n' + 'Actual type: "' + typeof serverUrl + '"',
       );
     }
     process.exit(1);
   }
-  if (!/^(http|ws)s?:\/\//.test(inspectorDebuggerUrl)) {
+  if (!/^(http|ws)s?:\/\//.test(serverUrl)) {
     console.error(
-      'ERROR: Invalid "inspectorDebuggerUrl" property.' +
+      'ERROR: Invalid "serverUrl" property.' +
         "\n" +
         "Please make sure that this url uses either the http, https, ws or wss.",
     );
     process.exit(1);
   }
-  if (inspectorDebuggerUrl.startsWith("http")) {
-    inspectorDebuggerUrl = "ws" + inspectorDebuggerUrl.slice(4);
+  if (serverUrl.startsWith("http")) {
+    serverUrl = "ws" + serverUrl.slice(4);
   }
+
+  let rxPairedInspectorUrl = serverUrl.endsWith("/")
+    ? serverUrl + "inspector/"
+    : serverUrl + "/inspector/";
 
   let deviceScriptUrl = configFileJson.deviceScriptUrl;
   if (typeof deviceScriptUrl !== "string") {
@@ -132,7 +133,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     watch: shouldWatch,
     plugins: [consolePlugin],
     deviceScriptUrl,
-    inspectorDebuggerUrl,
+    serverUrl: rxPairedInspectorUrl,
   }).catch((err) => {
     console.error(
       `\x1b[31m[${getHumanReadableHours()}]\x1b[0m Inspector build failed:`,
@@ -145,7 +146,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 /**
  * Build the inspector with the given options.
  * @param {Object} options
- * @param {string} options.inspectorDebuggerUrl - URL to contact the RxPaired
+ * @param {string} options.serverUrl - URL to contact the RxPaired
  * server.
  * @param {string|null|undefined} [options.deviceScriptUrl] - URL where the
  * RxPaired client script may be fetched.
@@ -167,7 +168,7 @@ export default function buildWebInspector(options) {
     plugins: options.plugins,
     outfile: path.join(currentDirName, "inspector.js"),
     define: {
-      _INSPECTOR_DEBUGGER_URL_: JSON.stringify(options.inspectorDebuggerUrl),
+      __RX_PAIRED_SERVER_URL__: JSON.stringify(options.serverUrl),
       __DEVICE_SCRIPT_URL__: JSON.stringify(options.deviceScriptUrl ?? null),
       __DISABLE_PASSWORD__: JSON.stringify(options.noPassword ?? false),
     },

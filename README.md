@@ -53,7 +53,7 @@ To quickly check if this tool can help you, you can test it easily:
    npx rx-paired
    ```
 
-   _(Note: Optionally, you can update the ports it relies on, call
+   _(Note: Optionally, you can update the port it relies on, call
    `npx rx-paired --help` to have more information on this)._
 
 2. In a web browser, go to the inspector page which should now be served at
@@ -239,21 +239,16 @@ connections, not HTTPS ones.
 This can become problematic especially when debugging remote devices because
 HTTP connections will here most likely be blocked.
 
-RxPaired exposes at most three HTTP ports:
+RxPaired exposes at most two HTTP ports:
 
-1. a port to communicate with inspectors (unless you ran in `--no-inspector`
-   mode)
+1. a WebSocket port to communicate with inspectors and devices.
 2. an HTTP port to serve both the inspector pages and client script.
-3. a port listening for logs sent by your application
 
-The inspector port should not cause any issue as inspector pages are generally
-only accessed locally.
-Also, the HTTP server is not mandatory as the client script can just be
+The HTTP server is not mandatory as the client script can just be
 copy-pasted in your application's HTML page (instead of fetching it through an
 URL).
-However, the third port (the one listening for logs, `22626` by default) is
-used inside the client script and thus would need to be accessed through a
-secure connection.
+However, the WebSocket port is used inside the client script and thus would need
+to be accessed through a secure connection.
 
 Thankfully, [easy and free solutions exist](https://github.com/anderspitman/awesome-tunneling?tab=readme-ov-file)
 to proxify local HTTP servers from a remote HTTPS URL.
@@ -326,14 +321,11 @@ RxPaired comes in three parts:
 3. The server, written in the `./server` directory, on which the two precedent parts
    rely.
 
-   The server listens on two ports for WebSocket connections: one for the inspector and
-   the other for the client-side script.
-
    The server is very configurable: it can for example set-up a password to protect its
    access, shutdown when abnormal behavior is detected (like too many device or
    inspector connections, too many wrong password, too many WebSocket messages sent),
    create and keep log files for each inspected devices, give a maximum lifetime for
-   each token, change the ports it listens to etc.
+   each token, change the port it listens to etc.
 
 <a class="anchor" href="#why-creating-this-tool"></a>
 

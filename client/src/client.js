@@ -28,7 +28,7 @@ function init(currentScriptSrc, playerClass, silent) {
    * URL relied on to exchange with the RxPaired server when a WebSocket
    * connection is established.
    */
-  let wsUrl = _DEVICE_DEBUGGER_URL_;
+  let wsUrl = __RX_PAIRED_SERVER_URL__;
   if (__FORCED_SERVER_URL__ !== "") {
     if (/^https?:\/\//i.test(__FORCED_SERVER_URL__)) {
       wsUrl = "ws" + __FORCED_SERVER_URL__.substring(4);

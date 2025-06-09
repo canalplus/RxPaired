@@ -22,10 +22,10 @@ cp rx-paired.config.example.json rx-paired.config.json
 
 In that new `rx-paired.config.json` file, you'll need to set two URLs:
 
-1. `inspectorDebuggerUrl`:
+1. `serverUrl`:
 
-   This will be the WebSocket address `RxPaired-server` is listening to for
-   `RxPaired-inspector` connections.
+   This will be the WebSocket address `RxPaired-server` is listening to to exchange
+   metadata between devices and inspectors.
 
    If you didn't start the `RxPaired-server` yet, you should first start doing this by
    using `npm run serve --workspace=server`.
