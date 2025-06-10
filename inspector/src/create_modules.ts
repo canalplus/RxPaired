@@ -272,18 +272,18 @@ export default function createModules({
     body.classList.add("module-body");
     const buttons = [];
     const resizeWidthButtonElt = createButton({
-      className: "btn-width-resize",
+      className: "module-btn btn-width-resize",
     });
     buttons.push(resizeWidthButtonElt);
     const moveDownButton = createButton({
-      className: "btn-move-down-module",
+      className: "module-btn btn-move-down-module",
       title: "Move the module one level down",
       onClick: moveModuleDown,
     });
     moveDownButton.innerHTML = moveDownSvg;
     buttons.push(moveDownButton);
     const moveUpButton = createButton({
-      className: "btn-move-up-module",
+      className: "module-btn btn-move-up-module",
       title: "Move the module one level up",
       onClick: moveModuleUp,
     });
@@ -292,7 +292,7 @@ export default function createModules({
 
     if (typeof clear === "function") {
       const clearButton = createButton({
-        className: "btn-clear-module",
+        className: "module-btn btn-clear-module",
         textContent: "🚫",
         title: "Clear content of this module",
         onClick: clear,
@@ -300,7 +300,7 @@ export default function createModules({
       buttons.push(clearButton);
     }
     const minimizedButtonElt = createButton({
-      className: "btn-min-max-module",
+      className: "module-btn btn-min-max-module",
     });
     buttons.push(minimizedButtonElt);
     if (isClosable) {
@@ -540,7 +540,7 @@ export default function createModules({
 
     function createClosingButton() {
       const button = createButton({
-        className: "btn-close-module",
+        className: "module-btn btn-close-module",
         title: "Close this module",
         onClick() {
           addModuleIdToState(configState, moduleId, STATE_PROPS.CLOSED_MODULES);
