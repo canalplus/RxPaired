@@ -18,7 +18,7 @@ export const CLIENT_SCRIPT_URL = __DEVICE_SCRIPT_URL__;
 export const DISABLE_PASSWORD = __DISABLE_PASSWORD__;
 
 /** Maximum number of individual logs that will be in the DOM at any given time. */
-export const DEFAULT_MAX_DISPLAYED_LOG_ELEMENTS = 5000;
+export const DEFAULT_MAX_DISPLAYED_LOG_ELEMENTS = 3000;
 
 /** Key used in local storage to store module-related configuration. */
 export const MODULE_CONFIG_LS_ITEM = "module-config";
