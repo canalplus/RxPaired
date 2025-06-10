@@ -261,7 +261,7 @@ export default function createModules({
     if (moduleRes === null) {
       return null;
     }
-    const { body, clear, destroy } = moduleRes;
+    const { body, destroy } = moduleRes;
     if (!(body instanceof HTMLElement)) {
       throw new Error("A module's body should be an HTMLElement");
     }
@@ -290,15 +290,6 @@ export default function createModules({
     moveUpButton.innerHTML = moveUpSvg;
     buttons.push(moveUpButton);
 
-    if (typeof clear === "function") {
-      const clearButton = createButton({
-        className: "module-btn btn-clear-module",
-        textContent: "🚫",
-        title: "Clear content of this module",
-        onClick: clear,
-      });
-      buttons.push(clearButton);
-    }
     const minimizedButtonElt = createButton({
       className: "module-btn btn-min-max-module",
     });
