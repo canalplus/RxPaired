@@ -121,6 +121,14 @@ export interface DeviceInitData {
   dateMs: number;
 }
 
+/** List players registered for a given token. */
+export interface RegisteredPlayer {
+  /** Unique name identifying that player. */
+  playerId: string;
+  /** Commands supported by that player. */
+  commands: string[];
+}
+
 /**
  * Log history stored with a `TokenMetadata`.
  */
@@ -199,6 +207,9 @@ export class TokenMetadata {
    */
   private _history: LogHistoryData;
 
+  /** All currently-registered players associated to this token. */
+  private _registeredPlayers: RegisteredPlayer[];
+
   /**
    * @param {string} tokenType
    * @param {string} tokenId - ID identifying the token
@@ -233,6 +244,7 @@ export class TokenMetadata {
       this._expirationMs = now + expirationDelay;
     }
     this.inspectors = [];
+    this._registeredPlayers = [];
     this.device = null;
     this.pingInterval = null;
     this._initData = null;
@@ -273,6 +285,56 @@ export class TokenMetadata {
    */
   public getDeviceInitData(): DeviceInitData | null {
     return this._initData;
+  }
+
+  /**
+   * Add a new player that can be remotely-interacted with for that token.
+   *
+   * Once that player is not available anymore, `unregisterPlayer` should be
+   * called.
+   * @param {Object} playerInfo - Information on that player.
+   */
+  public registerPlayer(playerInfo: RegisteredPlayer): void {
+    this.unregisterPlayer(playerInfo.playerId);
+    this._registeredPlayers.push(playerInfo);
+  }
+
+  /**
+   * Remove a previously available player on that token, that was previously
+   * added through the `registerPlayer` method.
+   *
+   * @param {string} playerId - Identifier of the player to remove. This should
+   * be the same identifier than the one communicated through a previous
+   * `registerPlayer` call.
+   * @returns {boolean} - If `true` the player associated to the corresponding
+   * identifier has been found and has been removed. If `false`, this is an
+   * unknown player to this `ActiveTokensList` instance.
+   */
+  public unregisterPlayer(playerId: string): boolean {
+    for (let i = 0; i < this._registeredPlayers.length; i++) {
+      const player = this._registeredPlayers[i];
+      if (player.playerId === playerId) {
+        this._registeredPlayers.splice(i, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Clear players previously registered through `registerPlayer` calls.
+   */
+  public clearPlayers(): void {
+    this._registeredPlayers = [];
+  }
+
+  /**
+   * Get all player metadata currently registered (thanks to `registerPlayer`
+   * calls) to that `ActiveTokensList` instance.
+   * @returns {Array.<Object>}
+   */
+  public getRegisteredPlayers(): RegisteredPlayer[] {
+    return this._registeredPlayers;
   }
 
   /**

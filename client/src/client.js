@@ -90,6 +90,19 @@ function init(currentScriptSrc, playerClass, silent) {
    */
   const MAX_LOG_LENGTH = 2000;
 
+  /**
+   * `Map` linking unique string player identifiers to an object with two keys:
+   *
+   * - `playerKey` {Object} - Reference identifying that player from the point
+   *   of view of the player that registered it (allows to easily unregister it
+   *   without having to know the identifier given by RxPaired).
+   *
+   * - `commands` {Object} - The commands implemented for that player.
+   *
+   * @type {Map.<string, { playerKey: Object, commands: Object }>}
+   */
+  const activePlayersMap = new Map();
+
   /** Method used to send log. */
   let sendLog = (log) => {
     /* Push to internal queue until initialization. */
@@ -517,36 +530,10 @@ function init(currentScriptSrc, playerClass, silent) {
       return;
     }
 
-    if (formattedObj.type === "eval") {
-      if (
-        typeof formattedObj.value !== "object" ||
-        formattedObj.value === null ||
-        typeof formattedObj.value.instruction !== "string" ||
-        typeof formattedObj.value.id !== "string"
-      ) {
-        console.error("RxPaired: Evaluation value in the wrong format");
-        return;
-      }
-      let val;
-      let instructionId = formattedObj.value.id;
-      try {
-        // Contrary to popular belief eval is the best and surest function ever
-        val = evaluate(formattedObj.value.instruction);
-        // handle the case where instruction is async
-        if (typeof window.Promise === "function" && val instanceof Promise) {
-          val
-            .then((value) => {
-              sendSuccessToSocket(value, socket, instructionId);
-            })
-            .catch((err) => {
-              sendErrorToSocket(err, socket, instructionId);
-            });
-        } else {
-          sendSuccessToSocket(val, socket, instructionId);
-        }
-      } catch (err) {
-        sendErrorToSocket(err, socket, instructionId);
-      }
+    if (formattedObj.type === "command") {
+      onCommandMessage(formattedObj);
+    } else if (formattedObj.type === "eval") {
+      onEvalMessage(formattedObj);
     }
   });
 
@@ -754,11 +741,160 @@ function init(currentScriptSrc, playerClass, silent) {
   }
 
   window.__RX_PLAYER_DEBUG_MODE__ = true;
+
+  window.__RX_PAIRED_PLAYERS__ = {
+    add: registerPlayer,
+    remove: unregisterPlayer,
+  };
+
   if (playerClass) {
     // Try to force the RxPlayer to redefine its console function.
     // May break at any time.
     playerClass.LogLevel = "DEBUG";
     playerClass.LogFormat = "full";
+  }
+
+  /**
+   * Add a controllable player to the `activePlayersMap`.
+   * @param {number} version - Should be set to `1`.
+   * @param {string} name - String identifying that player.
+   * @param {Object} key - Reference allowing to unregister the player through
+   * the `unregisterPlayer` function.
+   * @param {Object} commands - Commands implemented for that player.
+   */
+  function registerPlayer({ version, name, key, commands }) {
+    if (version !== 1 || typeof name !== "string") {
+      return;
+    }
+    let playerId = name;
+
+    // Add player name / id
+    let uniquePlayerId = 1;
+    while (true) {
+      const obj = activePlayersMap.get(playerId);
+      if (!obj) {
+        // No player with that name
+        break;
+      } else if (key === obj.playerKey) {
+        // already registered. we'll just replace the object
+        break;
+      } else {
+        uniquePlayerId++;
+        playerId = name + " " + uniquePlayerId;
+      }
+    }
+    activePlayersMap.set(playerId, {
+      playerKey: key,
+      commands: commands,
+    });
+    sendLog(
+      JSON.stringify({
+        type: "register-player",
+        value: {
+          playerId,
+          commands: Object.keys(commands),
+        },
+      }),
+    );
+  }
+
+  /**
+   * Remove a player from the `activePlayersMap`.
+   * @param {Object} key - Reference given previously to the corresponding
+   * `registerPlayer` function.
+   */
+  function unregisterPlayer(keyToRemove) {
+    let ogName;
+    for (const [key, val] of activePlayersMap.entries()) {
+      if (val.playerKey === keyToRemove) {
+        ogName = key;
+        activePlayersMap.delete(key);
+      }
+    }
+    if (ogName !== undefined) {
+      sendLog(
+        JSON.stringify({
+          type: "unregister-player",
+          value: {
+            playerId: ogName,
+          },
+        }),
+      );
+    }
+  }
+
+  /**
+   * Code to run when a `"command"` message is received from RxPaired-server.
+   * @param {Object} msgObj - The whole message object received.
+   */
+  function onCommandMessage(msgObj) {
+    if (
+      typeof msgObj.value !== "object" ||
+      msgObj.value === null ||
+      typeof msgObj.value.command !== "string" ||
+      typeof msgObj.value.playerId !== "string"
+    ) {
+      console.error("RxPaired: Command in the wrong format");
+      return;
+    }
+    if (
+      !Array.isArray(msgObj.value.args) ||
+      msgObj.value.args.some((a) => typeof a !== "string")
+    ) {
+      console.error("RxPaired: Command argument in the wrong format");
+      return;
+    }
+    const { command, playerId } = msgObj.value;
+    const playerObject = activePlayersMap.get(playerId);
+    if (!playerObject) {
+      console.warn("RxPaired: Invalid command: playerId not registered");
+      return;
+    }
+    const cmdFn = playerObject.commands[command];
+    if (typeof cmdFn !== "function") {
+      console.warn(
+        "RxPaired: Invalid command: command not registered for that player: " +
+          command,
+      );
+      return;
+    }
+    cmdFn(msgObj.value.args);
+  }
+
+  /**
+   * Code to run when an `"eval"` message is received from RxPaired-server.
+   * @param {Object} msgObj - The whole message object received.
+   */
+  function onEvalMessage(msgObj) {
+    if (
+      typeof msgObj.value !== "object" ||
+      msgObj.value === null ||
+      typeof msgObj.value.instruction !== "string" ||
+      typeof msgObj.value.id !== "string"
+    ) {
+      console.error("RxPaired: Evaluation value in the wrong format");
+      return;
+    }
+    let val;
+    let instructionId = msgObj.value.id;
+    try {
+      // Contrary to popular belief eval is the best and surest function ever
+      val = evaluate(msgObj.value.instruction);
+      // handle the case where instruction is async
+      if (typeof window.Promise === "function" && val instanceof Promise) {
+        val
+          .then((value) => {
+            sendSuccessToSocket(value, socket, instructionId);
+          })
+          .catch((err) => {
+            sendErrorToSocket(err, socket, instructionId);
+          });
+      } else {
+        sendSuccessToSocket(val, socket, instructionId);
+      }
+    } catch (err) {
+      sendErrorToSocket(err, socket, instructionId);
+    }
   }
 }
 
