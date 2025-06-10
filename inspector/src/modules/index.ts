@@ -169,13 +169,6 @@ export interface ModuleObject {
   body: HTMLElement;
 
   /**
-   * If defined, the module will be assumed to be clear-able. A button
-   * allowing to call this function might appear and trigger that
-   * function.
-   */
-  clear?: () => void;
-
-  /**
    * If defined, this is the logic that will be called when the module is
    * closed.
    * This function should clear all resources used by the module.
