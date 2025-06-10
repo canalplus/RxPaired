@@ -76,8 +76,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 
   let rxPairedInspectorUrl = serverUrl.endsWith("/")
-    ? serverUrl + "inspector/"
-    : serverUrl + "/inspector/";
+    ? serverUrl + "!inspector/"
+    : serverUrl + "/!inspector/";
 
   let deviceScriptUrl = configFileJson.deviceScriptUrl;
   if (typeof deviceScriptUrl !== "string") {
