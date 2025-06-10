@@ -549,93 +549,97 @@ export default function LogModule({
       timeoutInterval = undefined;
     }
 
-    const wasScrolledToBottom = isLogBodyScrolledToBottom();
-    let logsToDisplay =
-      newLogs.length > maxNbDisplayedLogs
-        ? newLogs.slice(maxNbDisplayedLogs)
-        : newLogs;
-    if (isResetting && logsToDisplay.length > MAX_LOGS_TO_PUSH_AT_ONCE) {
-      const nextIterationLogs = logsToDisplay.slice(
-        0,
-        logsToDisplay.length - MAX_LOGS_TO_PUSH_AT_ONCE,
-      );
-      if (nextIterationLogs.length > 0) {
-        displayLoadingHeader();
-        timeoutInterval = setTimeout(() => {
-          timeoutInterval = undefined;
-          displayNewLogs(nextIterationLogs, isResetting, scrollPercent);
-        }, BULK_LOGS_DISPLAY_TIMEOUT);
-      }
-      logsToDisplay = logsToDisplay.slice(
-        logsToDisplay.length - MAX_LOGS_TO_PUSH_AT_ONCE,
-      );
-    }
-
-    if (logsToDisplay.length >= 10) {
-      // Deattach parent of where the logs will be added before adding such logs
-      // in a loop as this seems to improve performance on most browsers.
-      logBodyElt.innerHTML = "";
-    }
-
-    const selectedLogId = logView.getCurrentState(STATE_PROPS.SELECTED_LOG_ID);
-    for (let logIdx = 0; logIdx < logsToDisplay.length; logIdx++) {
-      const actualLogIdx = isResetting
-        ? logsToDisplay.length - (logIdx + 1)
-        : logIdx;
-      const log = logsToDisplay[actualLogIdx];
-      const logElt = createLogElement(log[0], logView, configState);
-      if (log[1] === selectedLogId) {
-        if (selectedElt !== null) {
-          selectedElt.classList.remove("focused-bg");
+    window.requestAnimationFrame(() => {
+      const wasScrolledToBottom = isLogBodyScrolledToBottom();
+      let logsToDisplay =
+        newLogs.length > maxNbDisplayedLogs
+          ? newLogs.slice(maxNbDisplayedLogs)
+          : newLogs;
+      if (isResetting && logsToDisplay.length > MAX_LOGS_TO_PUSH_AT_ONCE) {
+        const nextIterationLogs = logsToDisplay.slice(
+          0,
+          logsToDisplay.length - MAX_LOGS_TO_PUSH_AT_ONCE,
+        );
+        if (nextIterationLogs.length > 0) {
+          displayLoadingHeader();
+          timeoutInterval = setTimeout(() => {
+            timeoutInterval = undefined;
+            displayNewLogs(nextIterationLogs, isResetting, scrollPercent);
+          }, BULK_LOGS_DISPLAY_TIMEOUT);
         }
-        logElt.classList.add("focused-bg");
-        selectedElt = logElt;
+        logsToDisplay = logsToDisplay.slice(
+          logsToDisplay.length - MAX_LOGS_TO_PUSH_AT_ONCE,
+        );
       }
-      logElt.dataset.logId = String(log[1]);
-      logElt.onclick = toggleCurrentElementSelection;
-      if (logContainerElt.children.length >= maxNbDisplayedLogs) {
-        if (timeoutInterval !== undefined) {
-          clearTimeout(timeoutInterval);
-          timeoutInterval = undefined;
+
+      if (logsToDisplay.length >= 10) {
+        // Deattach parent of where the logs will be added before adding such logs
+        // in a loop as this seems to improve performance on most browsers.
+        logBodyElt.innerHTML = "";
+      }
+
+      const selectedLogId = logView.getCurrentState(
+        STATE_PROPS.SELECTED_LOG_ID,
+      );
+      for (let logIdx = 0; logIdx < logsToDisplay.length; logIdx++) {
+        const actualLogIdx = isResetting
+          ? logsToDisplay.length - (logIdx + 1)
+          : logIdx;
+        const log = logsToDisplay[actualLogIdx];
+        const logElt = createLogElement(log[0], logView, configState);
+        if (log[1] === selectedLogId) {
+          if (selectedElt !== null) {
+            selectedElt.classList.remove("focused-bg");
+          }
+          logElt.classList.add("focused-bg");
+          selectedElt = logElt;
+        }
+        logElt.dataset.logId = String(log[1]);
+        logElt.onclick = toggleCurrentElementSelection;
+        if (logContainerElt.children.length >= maxNbDisplayedLogs) {
+          if (timeoutInterval !== undefined) {
+            clearTimeout(timeoutInterval);
+            timeoutInterval = undefined;
+          }
+          if (isResetting) {
+            break;
+          } else {
+            logContainerElt.removeChild(logContainerElt.children[0]);
+          }
         }
         if (isResetting) {
-          break;
+          logContainerElt.prepend(logElt);
         } else {
-          logContainerElt.removeChild(logContainerElt.children[0]);
+          logContainerElt.appendChild(logElt);
         }
       }
-      if (isResetting) {
-        logContainerElt.prepend(logElt);
-      } else {
-        logContainerElt.appendChild(logElt);
+
+      if (logContainerElt.parentElement !== logBodyElt) {
+        logBodyElt.appendChild(logContainerElt);
       }
-    }
 
-    if (logContainerElt.parentElement !== logBodyElt) {
-      logBodyElt.appendChild(logContainerElt);
-    }
-
-    if (timeoutInterval === undefined) {
-      const headerType = getHeaderType();
-      if (selectedElt === null && logContainerElt.childNodes.length === 0) {
-        if (headerType !== "no-log") {
-          displayNoLogHeader();
+      if (timeoutInterval === undefined) {
+        const headerType = getHeaderType();
+        if (selectedElt === null && logContainerElt.childNodes.length === 0) {
+          if (headerType !== "no-log") {
+            displayNoLogHeader();
+          }
+        } else if (selectedElt === null) {
+          if (headerType !== "no-selected") {
+            displayNoLogSelectedHeader();
+          }
+        } else {
+          displayLogSelectedHeader();
         }
-      } else if (selectedElt === null) {
-        if (headerType !== "no-selected") {
-          displayNoLogSelectedHeader();
-        }
-      } else {
-        displayLogSelectedHeader();
       }
-    }
 
-    if (scrollPercent !== undefined) {
-      logBodyElt.scrollTop =
-        (logBodyElt.scrollHeight - logBodyElt.clientHeight) * scrollPercent;
-    } else if (wasScrolledToBottom) {
-      logBodyElt.scrollTop = logBodyElt.scrollHeight;
-    }
+      if (scrollPercent !== undefined) {
+        logBodyElt.scrollTop =
+          (logBodyElt.scrollHeight - logBodyElt.clientHeight) * scrollPercent;
+      } else if (wasScrolledToBottom) {
+        logBodyElt.scrollTop = logBodyElt.scrollHeight;
+      }
+    });
   }
 
   function getSelectedElement(): HTMLElement | null {
