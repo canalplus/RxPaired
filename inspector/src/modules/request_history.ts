@@ -238,7 +238,7 @@ export default function generateRequestHistoryModule(
       pendingRequestInfo.element.textContent =
         lastKnownTimestamp === undefined
           ? " - "
-          : `+${lastKnownTimestamp - pendingRequestInfo.timestamp}ms`;
+          : `+${(lastKnownTimestamp - pendingRequestInfo.timestamp).toFixed(2)}ms`;
     }
   };
 }
