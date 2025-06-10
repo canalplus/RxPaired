@@ -183,8 +183,8 @@ export default async function RxPairedServer(options: ParsedOptions) {
   });
 
   deviceSocket.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    if (req.url !== undefined && req.url.startsWith("/inspector/")) {
-      const subUrl = req.url.substring("/inspector".length);
+    if (req.url !== undefined && req.url.startsWith("/!inspector/")) {
+      const subUrl = req.url.substring("/!inspector".length);
       onInspectorConnection(ws, req, subUrl);
       return;
     }

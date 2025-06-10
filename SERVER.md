@@ -118,12 +118,12 @@ This chapter specifies the possible exchanges between inspectors (the web page
 used for inspection) and the RxPaired's server.
 
 If the server is configured with a password, like it is by default, **all** the
-following URLs in this chapter MUST first begin by the `/inspector/<SERVER_PASSWORD>`
+following URLs in this chapter MUST first begin by the `/!inspector/<SERVER_PASSWORD>`
 path, where `<SERVER_PASSWORD>` is the server's password, then concatenating on top
 of it the following paths.
 
 If the server is configured with no password, **all** following URLs MUST just be
-prefixed by an `/inspector` path.
+prefixed by an `/!inspector` path.
 
 #### `/!list`
 

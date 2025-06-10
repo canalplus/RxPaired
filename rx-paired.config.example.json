@@ -1,5 +1,5 @@
 {
-  "__DESCRIPTION__serverUrl": "root URL used to communicate with RxPaired's server. It must include the protocol (e.g. \"http\"), which must be one of the following values: http, https, ws, wss. Inspectors will join adding the `/inspector/` path to that URL.",
+  "__DESCRIPTION__serverUrl": "root URL used to communicate with RxPaired's server. It must include the protocol (e.g. \"http\"), which must be one of the following values: http, https, ws, wss. Inspectors will join adding the `/!inspector/` path to that URL.",
   "serverUrl": "ws://127.0.0.1:22626",
 
   "__DESCRIPTION__deviceScriptUrl": "URL at which the `client.js` (the one that should be loaded by the device) can be reached. It must includes the protocol (e.g. \"http\"), which can be either http or https. Can be left empty if you do not wish to serve this script, in which case you will have to copy/paste it manually into the HTML page running on the device.",
