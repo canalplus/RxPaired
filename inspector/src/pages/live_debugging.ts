@@ -8,7 +8,20 @@ import {
   STATE_PROPS,
 } from "../constants";
 import createModules from "../create_modules";
+import { createButton, createElement } from "../dom-utils";
 import ObservableState, { UPDATE_TYPE } from "../observable_state";
+import {
+  bufferingSvg,
+  controlPanelSvg,
+  muteSvg,
+  pauseSvg,
+  playSvg,
+  reloadSvg,
+  seekSvg,
+  speedSvg,
+  stopSvg,
+  unmuteSvg,
+} from "../svg";
 import updateStateFromLog, {
   updateStatesFromLogGroup,
 } from "../update_state_from_log";
@@ -18,6 +31,8 @@ import {
   createDarkLightModeButton,
   createTimeRepresentationSwitch,
   isInitLog,
+  isRegisterPlayerLog,
+  isUnregisterPlayerLog,
   parseAndGenerateInitLog,
 } from "./utils";
 
@@ -67,9 +82,20 @@ export default function generateLiveDebuggingPage(
    */
   let wasAckReceived = false;
 
+  /**
+   * Optional "control panel" allowing to control a player.
+   */
+  let controlPanelElt: HTMLElement | null = null;
+
+  const registeredPlayers: Array<{ playerId: string; commands: string[] }> = [];
+
   const initialHistory =
     logViewState.getCurrentState(STATE_PROPS.LOGS_HISTORY) ?? [];
   let nextLogId = initialHistory.reduce((acc, val) => Math.max(acc, val[1]), 0);
+
+  const containerElt = createElement("div", {
+    className: "live-debugger-container",
+  });
 
   const errorContainerElt = strHtml`<div/>`;
   const headerElt = createLiveDebuggerHeaderElement(
@@ -80,12 +106,12 @@ export default function generateLiveDebuggingPage(
     inspectorState,
   );
   const modulesContainerElt = strHtml`<div/>`;
-  const liveDebuggingBodyElt = strHtml`<div>
+  const liveDebuggingBodyElt = strHtml`<div class="live-debugger-body">
     ${errorContainerElt}
     ${headerElt}
     ${modulesContainerElt}
   </div>`;
-  document.body.appendChild(liveDebuggingBodyElt);
+  containerElt.appendChild(liveDebuggingBodyElt);
 
   logViewState.subscribe(STATE_PROPS.SELECTED_LOG_ID, () => {
     const logViewProps = logViewState.getCurrentState();
@@ -126,10 +152,12 @@ export default function generateLiveDebuggingPage(
     configState,
     inspectorState,
   });
+
   currentSocket.addEventListener("close", onWebSocketClose);
   currentSocket.addEventListener("error", onWebSocketError);
   currentSocket.addEventListener("message", onWebSocketMessage);
 
+  document.body.appendChild(containerElt);
   return () => {
     currentSocket.removeEventListener("close", onWebSocketClose);
     currentSocket.removeEventListener("error", onWebSocketError);
@@ -138,7 +166,7 @@ export default function generateLiveDebuggingPage(
     disposeModules();
     inspectorState.dispose();
     delete (window as unknown as Record<string, unknown>).sendInstruction;
-    document.body.removeChild(liveDebuggingBodyElt);
+    document.body.removeChild(containerElt);
   };
 
   function onWebSocketClose() {
@@ -190,7 +218,54 @@ export default function generateLiveDebuggingPage(
       try {
         const signal = JSON.parse(event.data);
 
+        if (isRegisterPlayerLog(event.data)) {
+          if (controlPanelElt && controlPanelElt.parentElement) {
+            controlPanelElt.parentElement.removeChild(controlPanelElt);
+          }
+
+          registeredPlayers.push({
+            playerId: signal.value.playerId as string,
+            commands: signal.value.commands as string[],
+          });
+
+          controlPanelElt = createControlPanel(
+            currentSocket,
+            registeredPlayers,
+          );
+          if (controlPanelElt !== null) {
+            containerElt.appendChild(controlPanelElt);
+          }
+          return;
+        }
+
+        if (isUnregisterPlayerLog(event.data)) {
+          if (controlPanelElt && controlPanelElt.parentElement) {
+            controlPanelElt.parentElement.removeChild(controlPanelElt);
+          }
+
+          for (let i = registeredPlayers.length - 1; i >= 0; i--) {
+            if (
+              registeredPlayers[i].playerId ===
+              (signal.value.playerId as string)
+            ) {
+              registeredPlayers.splice(i, 1);
+            }
+          }
+          controlPanelElt = createControlPanel(
+            currentSocket,
+            registeredPlayers,
+          );
+          if (controlPanelElt !== null) {
+            containerElt.appendChild(controlPanelElt);
+          }
+          return;
+        }
+
         if (isInitLog(event.data)) {
+          registeredPlayers.length = 0;
+          if (controlPanelElt && controlPanelElt.parentElement) {
+            controlPanelElt.parentElement.removeChild(controlPanelElt);
+          }
           const { dateAtPageLoad, log } = parseAndGenerateInitLog(event.data);
           clearInspectorState(inspectorState, logViewState);
           let updates: Array<[string, number]> = [[log, nextLogId++]];
@@ -458,4 +533,331 @@ function startWebsocketConnection(
  */
 function emphasizeForConsole(text: string): string {
   return isChromiumBasedBrowser ? `\u001b[32m${text}\u001b[0m` : text;
+}
+
+function createControlPanel(
+  socket: WebSocket,
+  players: Array<{
+    playerId: string;
+    commands: string[];
+  }>,
+): HTMLElement | null {
+  if (players.length === 0) {
+    return null;
+  }
+
+  let currentPlayerIndex = players.length - 1; // Start with the last player
+
+  const controlPanel = createElement("div", {
+    className: "control-panel",
+  });
+  const controlPanelMainLine = createElement("div", {
+    className: "control-panel-line",
+  });
+  const controlPanelTitle = createElement("div", {
+    className: "control-panel-title",
+  });
+  controlPanelTitle.innerHTML = controlPanelSvg;
+  controlPanelMainLine.appendChild(controlPanelTitle);
+
+  // Create player navigation container
+  const playerNavContainer = createElement("div", {
+    className: "control-panel-player-nav",
+  });
+
+  const playerName = createElement("div", {
+    textContent: players[currentPlayerIndex].playerId,
+  });
+
+  if (players.length === 1) {
+    playerNavContainer.appendChild(playerName);
+  } else {
+    const leftArrow = createElement("button", {
+      textContent: "◀",
+      className: "control-panel-player-nav-arrow",
+    });
+    playerNavContainer.appendChild(leftArrow);
+
+    playerNavContainer.appendChild(playerName);
+
+    const rightArrow = createElement("button", {
+      textContent: "▶",
+      className: "control-panel-player-nav-arrow",
+    });
+    playerNavContainer.appendChild(rightArrow);
+    leftArrow.addEventListener("click", () => {
+      currentPlayerIndex =
+        (currentPlayerIndex - 1 + players.length) % players.length;
+      updateControlPanel();
+    });
+    rightArrow.addEventListener("click", () => {
+      currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+      updateControlPanel();
+    });
+  }
+
+  controlPanelTitle.appendChild(playerNavContainer);
+
+  const controlPanelButtonsElt = createElement("div", {
+    className: "control-panel-buttons",
+  });
+  controlPanelMainLine.appendChild(controlPanelButtonsElt);
+
+  const controlPanelSecondaryLine = createElement("div", {
+    className: "control-panel-line",
+  });
+  controlPanelSecondaryLine.style.display = "none";
+
+  updateControlPanel();
+
+  controlPanel.appendChild(controlPanelSecondaryLine);
+  controlPanel.appendChild(controlPanelMainLine);
+
+  return controlPanel;
+
+  function sendCommand(command: string, args?: string[]) {
+    const currentPlayer = players[currentPlayerIndex];
+    socket.send(
+      JSON.stringify({
+        type: "command",
+        value: {
+          playerId: currentPlayer.playerId,
+          command,
+          args: args ?? [],
+        },
+      }),
+    );
+  }
+
+  function updateControlPanel() {
+    const currentPlayer = players[currentPlayerIndex];
+    playerName.textContent = currentPlayer.playerId;
+
+    controlPanelButtonsElt.innerHTML = "";
+    controlPanelSecondaryLine.innerHTML = "";
+    controlPanelSecondaryLine.style.display = "none";
+
+    const controlBarInfo: Array<{
+      title: string;
+      command: string | null;
+      text: string;
+      svg: string | null;
+      toggleElt?: HTMLElement | null;
+    }> = [];
+
+    const commands = currentPlayer.commands;
+
+    if (commands.includes("reload")) {
+      controlBarInfo.push({
+        title: "Reload Playback",
+        command: "reload",
+        text: "Reload",
+        svg: reloadSvg,
+      });
+    }
+    if (commands.includes("stop")) {
+      controlBarInfo.push({
+        title: "Stop Playback",
+        command: "stop",
+        text: "Stop",
+        svg: stopSvg,
+      });
+    }
+    if (commands.includes("resume")) {
+      controlBarInfo.push({
+        title: "Resume Playback",
+        command: "resume",
+        text: "Resume",
+        svg: playSvg,
+      });
+    }
+    if (commands.includes("pause")) {
+      controlBarInfo.push({
+        title: "Pause Playback",
+        command: "pause",
+        text: "Pause",
+        svg: pauseSvg,
+      });
+    }
+    if (commands.includes("mute")) {
+      controlBarInfo.push({
+        title: "Mute audio",
+        command: "mute",
+        text: "Mute",
+        svg: muteSvg,
+      });
+    }
+    if (commands.includes("unmute")) {
+      controlBarInfo.push({
+        title: "Unmute audio",
+        command: "unmute",
+        text: "Unmute",
+        svg: unmuteSvg,
+      });
+    }
+
+    if (
+      commands.includes("seekAbsolute") ||
+      commands.includes("seekRelative")
+    ) {
+      const seekbar = createSeekBar();
+      controlBarInfo.push({
+        title: "Seek in content",
+        toggleElt: seekbar,
+        text: "Seek",
+        svg: seekSvg,
+        command: null,
+      });
+    }
+
+    if (commands.includes("setPlaybackRate")) {
+      const inputBar = createNumericInputForCommand("setPlaybackRate", "1");
+      controlBarInfo.push({
+        title: "Set playback rate",
+        toggleElt: inputBar,
+        text: "Playback Rate",
+        svg: speedSvg,
+        command: null,
+      });
+    }
+
+    if (commands.includes("setWantedBufferAhead")) {
+      const inputBar = createNumericInputForCommand("setWantedBufferAhead", "");
+      controlBarInfo.push({
+        title: "Set wanted buffer ahead",
+        toggleElt: inputBar,
+        text: "Buffer Ahead",
+        svg: bufferingSvg,
+        command: null,
+      });
+    }
+
+    const buttonElts = controlBarInfo.map((item) => {
+      const btn = createButton({
+        className: "control-panel-btn",
+        title: item.title,
+        onClick: () => {
+          if (item.toggleElt) {
+            for (const btnElt of buttonElts) {
+              if (btnElt === btn) {
+                continue;
+              }
+              if (btnElt.classList.contains("active")) {
+                btnElt.classList.remove("active");
+              }
+            }
+            if (!btn.classList.contains("active")) {
+              btn.classList.add("active");
+              controlPanelSecondaryLine.innerHTML = "";
+              controlPanelSecondaryLine.appendChild(item.toggleElt);
+              controlPanelSecondaryLine.style.display = "";
+            } else {
+              btn.classList.remove("active");
+              controlPanelSecondaryLine.innerHTML = "";
+              controlPanelSecondaryLine.style.display = "none";
+            }
+          }
+
+          if (item.command !== null) {
+            sendCommand(item.command);
+          }
+        },
+      });
+      if (item.svg !== null) {
+        btn.innerHTML = item.svg;
+      }
+      const btnText = createElement("span", {
+        textContent: item.text,
+      });
+      btn.appendChild(btnText);
+      controlPanelButtonsElt.appendChild(btn);
+      return btn;
+    });
+  }
+
+  function createSeekBar(): HTMLElement {
+    const currentPlayer = players[currentPlayerIndex];
+    const commands = currentPlayer.commands;
+
+    const seekBar = createElement("div", {
+      className: "control-panel-line",
+    });
+
+    const seekTypeSelect = createElement("select");
+    if (commands.includes("seekAbsolute")) {
+      const optionAbsolute = createElement("option", {
+        textContent: "absolute (seconds)",
+      });
+      optionAbsolute.value = "absolute";
+      seekTypeSelect.appendChild(optionAbsolute);
+    }
+
+    if (commands.includes("seekRelative")) {
+      const optionRelative = createElement("option", {
+        textContent: "relative (seconds)",
+      });
+      optionRelative.value = "relative";
+      seekTypeSelect.appendChild(optionRelative);
+    }
+
+    const seekInput = createElement("input");
+    seekInput.type = "number";
+    seekInput.value = "0";
+
+    const goButton = createElement("button");
+    goButton.textContent = "go";
+
+    seekBar.appendChild(seekTypeSelect);
+    seekBar.appendChild(seekInput);
+    seekBar.appendChild(goButton);
+    const performSeek = () => {
+      const numericValue = seekInput.value;
+      if (
+        seekTypeSelect.value === "relative" &&
+        commands.includes("seekRelative")
+      ) {
+        sendCommand("seekRelative", [numericValue]);
+      } else if (commands.includes("seekAbsolute")) {
+        sendCommand("seekAbsolute", [numericValue]);
+      }
+    };
+
+    goButton.addEventListener("click", performSeek);
+    seekInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        performSeek();
+      }
+    });
+
+    return seekBar;
+  }
+
+  function createNumericInputForCommand(command: string, defaultVal: string) {
+    const barElt = createElement("div", {
+      className: "control-panel-line",
+    });
+
+    const numInput = createElement("input");
+    numInput.type = "number";
+    numInput.value = defaultVal;
+
+    const validateButton = createElement("button");
+    validateButton.textContent = "validate";
+
+    barElt.appendChild(numInput);
+    barElt.appendChild(validateButton);
+    const performCommand = () => {
+      const numericValue = numInput.value;
+      sendCommand(command, [numericValue]);
+    };
+
+    validateButton.addEventListener("click", performCommand);
+    numInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        performCommand();
+      }
+    });
+
+    return barElt;
+  }
 }
