@@ -1,6 +1,5 @@
 import {
-  DEFAULT_INSPECTOR_PORT,
-  DEFAULT_DEVICE_PORT,
+  DEFAULT_SERVER_PORT,
   DEFAULT_HISTORY_SIZE,
   DEFAULT_MAX_TOKEN_DURATION,
   DEFAULT_MAX_LOG_LENGTH,
@@ -14,8 +13,7 @@ import {
 import { generatePassword } from "./utils.js";
 
 export interface ParsedOptions {
-  inspectorPort: number;
-  devicePort: number;
+  port: number;
   shouldCreateLogFiles: boolean;
   password: string | null;
   historySize: number;
@@ -33,24 +31,11 @@ export interface ParsedOptions {
 
 const optionsDescription = [
   {
-    shortForm: "cp",
-    longForm: "inspector-port",
+    shortForm: "p",
+    longForm: "port",
     argumentDescription: "port",
-    description:
-      "Port used for inspector-to-server communication.\n" +
-      "To set to `-1` to disable (in which case you may want " +
-      'to rely on "no-token" mode).\n' +
-      `Defaults to ${DEFAULT_INSPECTOR_PORT}.`,
-    outputVar: "inspectorPort",
-  },
-  {
-    shortForm: "dp",
-    longForm: "device-port",
-    argumentDescription: "port",
-    description:
-      "Port used for device-to-server communication.\n" +
-      `Defaults to ${DEFAULT_DEVICE_PORT}.`,
-    outputVar: "devicePort",
+    description: "Port used to exchange information with the server.\n",
+    outputVar: "port",
   },
   {
     shortForm: "f",
@@ -196,8 +181,7 @@ export default function parseOptions(args: string[]): ParsedOptions {
 
   let shouldGeneratePassword = true;
   const parsed: ParsedOptions = {
-    inspectorPort: DEFAULT_INSPECTOR_PORT,
-    devicePort: DEFAULT_DEVICE_PORT,
+    port: DEFAULT_SERVER_PORT,
     shouldCreateLogFiles: false,
     password: null,
     historySize: DEFAULT_HISTORY_SIZE,
@@ -223,8 +207,7 @@ export default function parseOptions(args: string[]): ParsedOptions {
       ) {
         foundOpt = true;
         switch (opt.longForm) {
-          case "inspector-port":
-          case "device-port":
+          case "port":
           case "history-size":
           case "max-token-duration":
           case "max-log-length":

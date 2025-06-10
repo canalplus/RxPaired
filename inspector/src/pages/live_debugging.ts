@@ -441,8 +441,8 @@ function startWebsocketConnection(
 ): WebSocket {
   const wsUrl =
     password === ""
-      ? `${SERVER_URL}/${tokenId}`
-      : `${SERVER_URL}/${password}/${tokenId}`;
+      ? `${SERVER_URL}${tokenId}`
+      : `${SERVER_URL}${password}/${tokenId}`;
   const socket = new WebSocket(wsUrl);
   return socket;
 }
