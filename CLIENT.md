@@ -20,10 +20,10 @@ You can base yourself on the `rx-paired.config.example.json` file:
 cp rx-paired.config.example.json rx-paired.config.json
 ```
 
-### The `deviceDebuggerUrl`
+### The `serverUrl`
 
 In that new `rx-paired.config.json` file, you'll need to set one URL: the
-`deviceDebuggerUrl`.
+`serverUrl`.
 
 This will be the WebSocket address `RxPaired-server` is listening to for
 `RxPaired-client` connections and messages.
