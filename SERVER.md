@@ -225,6 +225,9 @@ Various messages may be sent by the server through that WebSocket connection:
   first log(s) sent by the device. It should be sent before any logs messages
   originating from the device.
 
+  All logs and player information from a previous debugging session should
+  be cleared by the inspector when receiving this message.
+
   The content of this message is an UTF-8 encoded JSON, with the following
   keys:
 

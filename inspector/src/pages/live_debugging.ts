@@ -351,7 +351,7 @@ function createCloseConnectionButton(currentSocket: WebSocket): HTMLElement {
 }
 
 /**
- * @param {Object} inspectorState
+ * @param {Object} logViewState
  * @returns {HTMLButtonElement}
  */
 function createExportLogsButton(
