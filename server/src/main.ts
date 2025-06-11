@@ -56,10 +56,6 @@ export default async function RxPairedServer(options: ParsedOptions) {
   }
 
   const deviceSocket = new WebSocketServer({ noServer: true });
-  const htmlInspectorSocket =
-    options.inspectorPort < 0
-      ? null
-      : new WebSocketServer({ port: options.inspectorPort });
 
   const server = createServer(function (req, response) {
     if (req.method === "POST") {
@@ -174,11 +170,10 @@ export default async function RxPairedServer(options: ParsedOptions) {
     });
   });
 
-  server.listen(options.devicePort);
+  server.listen(options.port);
 
   const checkers = createCheckers(activeTokensList, {
     deviceSocket,
-    htmlInspectorSocket,
     maxTokenDuration: options.maxTokenDuration,
     inspectorMessageLimit: options.inspectorMessageLimit,
     deviceMessageLimit: options.deviceMessageLimit,
@@ -188,6 +183,11 @@ export default async function RxPairedServer(options: ParsedOptions) {
   });
 
   deviceSocket.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    if (req.url !== undefined && req.url.startsWith("/!inspector/")) {
+      const subUrl = req.url.substring("/!inspector".length);
+      onInspectorConnection(ws, req, subUrl);
+      return;
+    }
     const connectionMetadata = checkNewDeviceConnection(req);
     if (connectionMetadata === null) {
       ws.close();
@@ -245,189 +245,192 @@ export default async function RxPairedServer(options: ParsedOptions) {
     });
   });
 
-  function removeTokenFromList(tokenId: string) {
-    const indexOfToken = activeTokensList.findIndex(tokenId);
-    if (indexOfToken === -1) {
-      writeLog("warn", "Closing device's token not found", { tokenId });
+  function onInspectorConnection(
+    ws: WebSocket,
+    req: IncomingMessage,
+    url: string,
+  ) {
+    const urlParts = parseInspectorUrl(url, options.password);
+    const receivedPassword = urlParts.password ?? "";
+    if (receivedPassword !== (options.password ?? "")) {
+      writeLog(
+        "warn",
+        "Received inspector request with invalid password: " + receivedPassword,
+        { address: req.socket.remoteAddress },
+      );
+      ws.close();
+      checkers.checkBadPasswordLimit();
       return;
     }
-    writeLog("log", "Removing token", {
-      tokenId,
-      remaining: activeTokensList.size() - 1,
-    });
-    activeTokensList.removeIndex(indexOfToken);
-  }
 
-  if (htmlInspectorSocket !== null) {
-    htmlInspectorSocket.on("connection", (ws, req) => {
-      if (req.url === undefined) {
-        ws.close();
-        return;
-      }
-      const urlParts = parseInspectorUrl(req.url, options.password);
-      const receivedPassword = urlParts.password ?? "";
-      if (receivedPassword !== (options.password ?? "")) {
-        writeLog(
-          "warn",
-          "Received inspector request with invalid password: " +
-            receivedPassword,
-          { address: req.socket.remoteAddress },
-        );
-        ws.close();
-        checkers.checkBadPasswordLimit();
-        return;
-      }
-
-      // Special token "list" request:
-      // Regularly returns the list of currently active tokens
-      if (urlParts.command === "list") {
-        writeLog("log", "Received inspector request for list of tokens", {
-          address: req.socket.remoteAddress,
-        });
-        const itv = setInterval(sendCurrentListOfTokens, 3000);
-        sendCurrentListOfTokens();
-        ws.onclose = () => {
-          clearInterval(itv);
-        };
-        function sendCurrentListOfTokens() {
-          checkers.forceExpirationCheck();
-          const now = performance.now();
-          ws.send(
-            JSON.stringify({
-              isNoTokenEnabled: !options.disableNoToken,
-              tokenList: activeTokensList.getList().map((t) => {
-                return {
-                  tokenId: t.tokenId,
-                  date: t.date,
-                  timestamp: t.timestamp,
-                  isPersistent: t.tokenType === TokenType.Persistent,
-                  msUntilExpiration: Math.max(t.getExpirationDelay(now), 0),
-                };
-              }),
-            }),
-          );
-        }
-        return;
-      }
-
-      const tokenId = urlParts.tokenId;
-      if (tokenId === undefined) {
-        ws.close();
-        return;
-      }
-
-      checkers.checkNewInspectorLimit();
-      if (tokenId.length > 100) {
-        writeLog(
-          "warn",
-          "Received inspector request with token too long: " +
-            String(tokenId.length),
-        );
-        ws.close();
-        return;
-      } else if (!/[a-z0-9]+/.test(tokenId)) {
-        writeLog("warn", "Received inspector request with invalid token.", {
-          tokenId,
-        });
-        ws.close();
-        return;
-      }
-
-      writeLog("log", "Inspector: Received authorized inspector connection.", {
+    // Special token "list" request:
+    // Regularly returns the list of currently active tokens
+    if (urlParts.command === "list") {
+      writeLog("log", "Received inspector request for list of tokens", {
         address: req.socket.remoteAddress,
-        tokenId,
-        command: urlParts.command,
       });
-
-      const isPersistentTokenCreation = urlParts.command === "persist";
-
-      let existingToken = activeTokensList.find(tokenId);
-      if (existingToken === undefined) {
-        writeLog("log", "Creating new token", {
-          tokenId,
-          remaining: activeTokensList.size() + 1,
-        });
-        existingToken = activeTokensList.create(
-          isPersistentTokenCreation
-            ? TokenType.Persistent
-            : TokenType.FromInspector,
-          tokenId,
-          options.historySize,
-          urlParts.expirationDelay ?? options.maxTokenDuration,
+      const itv = setInterval(sendCurrentListOfTokens, 3000);
+      sendCurrentListOfTokens();
+      ws.onclose = () => {
+        clearInterval(itv);
+      };
+      function sendCurrentListOfTokens() {
+        checkers.forceExpirationCheck();
+        const now = performance.now();
+        ws.send(
+          JSON.stringify({
+            isNoTokenEnabled: !options.disableNoToken,
+            tokenList: activeTokensList.getList().map((t) => {
+              return {
+                tokenId: t.tokenId,
+                date: t.date,
+                timestamp: t.timestamp,
+                isPersistent: t.tokenType === TokenType.Persistent,
+                msUntilExpiration: Math.max(t.getExpirationDelay(now), 0),
+              };
+            }),
+          }),
         );
-      } else {
-        if (isPersistentTokenCreation) {
-          existingToken.tokenType = TokenType.Persistent;
-        }
-        if (urlParts.expirationDelay !== undefined) {
-          existingToken.updateExpirationDelay(urlParts.expirationDelay);
-        }
-        writeLog("log", "Adding new inspector to token.", { tokenId });
       }
+      return;
+    }
 
-      if (isPersistentTokenCreation) {
-        persistentTokensStorage.addToken(existingToken);
-      }
+    const tokenId = urlParts.tokenId;
+    if (tokenId === undefined) {
+      ws.close();
+      return;
+    }
 
-      const pingInterval = setInterval(() => {
-        ws.send("ping");
-      }, 10000);
-      existingToken.inspectors.push({
-        webSocket: ws,
-        pingInterval,
+    checkers.checkNewInspectorLimit();
+    if (tokenId.length > 100) {
+      writeLog(
+        "warn",
+        "Received inspector request with token too long: " +
+          String(tokenId.length),
+      );
+      ws.close();
+      return;
+    } else if (!/[a-z0-9]+/.test(tokenId)) {
+      writeLog("warn", "Received inspector request with invalid token.", {
+        tokenId,
       });
+      ws.close();
+      return;
+    }
 
-      sendMessageToInspector("ack", ws, req, tokenId);
+    writeLog("log", "Inspector: Received authorized inspector connection.", {
+      address: req.socket.remoteAddress,
+      tokenId,
+      command: urlParts.command,
+    });
 
-      const deviceInitData = existingToken.getDeviceInitData();
-      if (deviceInitData !== null) {
-        const { timestamp, dateMs } = deviceInitData;
-        const { history, maxHistorySize } = existingToken.getCurrentHistory();
-        const message = JSON.stringify({
-          type: "Init",
-          value: {
-            timestamp,
-            dateMs,
-            history,
-            maxHistorySize,
-          },
-        });
-        sendMessageToInspector(message, ws, req, tokenId);
+    const isPersistentTokenCreation = urlParts.command === "persist";
+
+    let existingToken = activeTokensList.find(tokenId);
+    if (existingToken === undefined) {
+      writeLog("log", "Creating new token", {
+        tokenId,
+        remaining: activeTokensList.size() + 1,
+      });
+      existingToken = activeTokensList.create(
+        isPersistentTokenCreation
+          ? TokenType.Persistent
+          : TokenType.FromInspector,
+        tokenId,
+        options.historySize,
+        urlParts.expirationDelay ?? options.maxTokenDuration,
+      );
+    } else {
+      if (isPersistentTokenCreation) {
+        existingToken.tokenType = TokenType.Persistent;
       }
-      checkers.forceExpirationCheck();
+      if (urlParts.expirationDelay !== undefined) {
+        existingToken.updateExpirationDelay(urlParts.expirationDelay);
+      }
+      writeLog("log", "Adding new inspector to token.", { tokenId });
+    }
 
-      ws.on("message", (message) => {
-        checkers.checkInspectorMessageLimit();
-        /* eslint-disable-next-line @typescript-eslint/no-base-to-string */
-        const messageStr = message.toString();
+    if (isPersistentTokenCreation) {
+      persistentTokensStorage.addToken(existingToken);
+    }
 
-        if (messageStr === "pong") {
-          return;
-        }
+    const pingInterval = setInterval(() => {
+      ws.send("ping");
+    }, 10000);
+    existingToken.inspectors.push({
+      webSocket: ws,
+      pingInterval,
+    });
 
-        let messageObj;
-        try {
-          messageObj = JSON.parse(messageStr) as unknown;
-        } catch (err) {
-          writeLog("warn", "Could not parse message given by inspector.", {
-            address: req.socket.remoteAddress,
-            tokenId,
-            message: messageStr.length < 200 ? messageStr : undefined,
-          });
-        }
+    sendMessageToInspector("ack", ws, req, tokenId);
 
-        if (!isEvalMessage(messageObj)) {
-          writeLog("warn", "Unknown message type received by inspector", {
-            address: req.socket.remoteAddress,
-            tokenId,
-          });
-          return;
-        }
-        if (existingToken === undefined || existingToken.device === null) {
-          writeLog("warn", "Could not send eval message: no device connected", {
-            address: req.socket.remoteAddress,
-            tokenId,
-          });
+    const deviceInitData = existingToken.getDeviceInitData();
+    if (deviceInitData !== null) {
+      const { timestamp, dateMs } = deviceInitData;
+      const { history, maxHistorySize } = existingToken.getCurrentHistory();
+      const message = JSON.stringify({
+        type: "Init",
+        value: {
+          timestamp,
+          dateMs,
+          history,
+          maxHistorySize,
+        },
+      });
+      sendMessageToInspector(message, ws, req, tokenId);
+
+      const players = existingToken.getRegisteredPlayers();
+      for (const player of players) {
+        sendMessageToInspector(
+          JSON.stringify({
+            type: "register-player",
+            value: {
+              playerId: player.playerId,
+              commands: player.commands,
+            },
+          }),
+          ws,
+          req,
+          tokenId,
+        );
+      }
+    }
+    checkers.forceExpirationCheck();
+
+    ws.on("message", (message) => {
+      checkers.checkInspectorMessageLimit();
+      /* eslint-disable-next-line @typescript-eslint/no-base-to-string */
+      const messageStr = message.toString();
+
+      if (messageStr === "pong") {
+        return;
+      }
+
+      let messageObj;
+      try {
+        messageObj = JSON.parse(messageStr) as unknown;
+      } catch (err) {
+        writeLog("warn", "Could not parse message given by inspector.", {
+          address: req.socket.remoteAddress,
+          tokenId,
+          message: messageStr.length < 200 ? messageStr : undefined,
+        });
+      }
+
+      if (!isEvalMessage(messageObj) && !isCommandMessage(messageObj)) {
+        writeLog("warn", "Unknown message type received by inspector", {
+          address: req.socket.remoteAddress,
+          tokenId,
+        });
+        return;
+      }
+
+      if (existingToken === undefined || existingToken.device === null) {
+        writeLog("warn", "Could not send eval message: no device connected", {
+          address: req.socket.remoteAddress,
+          tokenId,
+        });
+        if (isEvalMessage(messageObj)) {
           ws.send(
             JSON.stringify({
               type: "eval-error",
@@ -437,16 +440,18 @@ export default async function RxPairedServer(options: ParsedOptions) {
               },
             }),
           );
-          return;
-        } else if (existingToken.device.type !== "websocket") {
-          writeLog(
-            "warn",
-            "Could not send eval message: device connected through HTTP POST",
-            {
-              address: req.socket.remoteAddress,
-              tokenId,
-            },
-          );
+        }
+        return;
+      } else if (existingToken.device.type !== "websocket") {
+        writeLog(
+          "warn",
+          "Could not send eval message: device connected through HTTP POST",
+          {
+            address: req.socket.remoteAddress,
+            tokenId,
+          },
+        );
+        if (isEvalMessage(messageObj)) {
           ws.send(
             JSON.stringify({
               type: "eval-error",
@@ -459,67 +464,75 @@ export default async function RxPairedServer(options: ParsedOptions) {
               },
             }),
           );
-          return;
         }
+        return;
+      }
 
-        writeLog("log", "Eval message received by inspector.", {
-          address: req.socket.remoteAddress,
-          tokenId,
-        });
-
-        try {
-          existingToken.device.value.send(messageStr);
-        } catch (err) {
-          writeLog("warn", "Error while sending message to a device", {
-            tokenId,
-          });
-        }
+      writeLog("log", "Eval or command message received by inspector.", {
+        address: req.socket.remoteAddress,
+        tokenId,
       });
 
-      ws.on("close", () => {
-        if (existingToken === undefined || tokenId === undefined) {
-          return;
-        }
-        writeLog("log", "Inspector disconnected.", {
-          address: req.socket.remoteAddress,
+      try {
+        existingToken.device.value.send(messageStr);
+      } catch (err) {
+        writeLog("warn", "Error while sending message to a device", {
           tokenId,
         });
-        const indexOfInspector = existingToken.inspectors.findIndex(
-          (obj) => obj.webSocket === ws,
-        );
-        if (indexOfInspector === -1) {
-          writeLog("warn", "Closing inspector not found.", { tokenId });
-          return;
-        }
-        clearInterval(existingToken.inspectors[indexOfInspector].pingInterval);
-        existingToken.inspectors.splice(indexOfInspector, 1);
-        if (
-          existingToken.tokenType !== TokenType.Persistent &&
-          existingToken.inspectors.length === 0 &&
-          existingToken.device === null
-        ) {
-          const indexOfToken = activeTokensList.findIndex(tokenId);
-          if (indexOfToken === -1) {
-            writeLog("warn", "Closing inspector's token not found.", {
-              tokenId,
-            });
-            return;
-          }
-          writeLog("log", "Removing token.", {
-            tokenId,
-            remaining: activeTokensList.size() - 1,
-          });
-          activeTokensList.removeIndex(indexOfToken);
-        }
-      });
+      }
     });
-    logger.log(
-      `Emitting to web inspectors at ws://127.0.0.1:${options.inspectorPort}`,
-    );
+
+    ws.on("close", () => {
+      if (existingToken === undefined || tokenId === undefined) {
+        return;
+      }
+      writeLog("log", "Inspector disconnected.", {
+        address: req.socket.remoteAddress,
+        tokenId,
+      });
+      const indexOfInspector = existingToken.inspectors.findIndex(
+        (obj) => obj.webSocket === ws,
+      );
+      if (indexOfInspector === -1) {
+        writeLog("warn", "Closing inspector not found.", { tokenId });
+        return;
+      }
+      clearInterval(existingToken.inspectors[indexOfInspector].pingInterval);
+      existingToken.inspectors.splice(indexOfInspector, 1);
+      if (
+        existingToken.tokenType !== TokenType.Persistent &&
+        existingToken.inspectors.length === 0 &&
+        existingToken.device === null
+      ) {
+        const indexOfToken = activeTokensList.findIndex(tokenId);
+        if (indexOfToken === -1) {
+          writeLog("warn", "Closing inspector's token not found.", {
+            tokenId,
+          });
+          return;
+        }
+        writeLog("log", "Removing token.", {
+          tokenId,
+          remaining: activeTokensList.size() - 1,
+        });
+        activeTokensList.removeIndex(indexOfToken);
+      }
+    });
   }
-  logger.log(
-    `Listening for device logs at ws://127.0.0.1:${options.devicePort}`,
-  );
+
+  function removeTokenFromList(tokenId: string) {
+    const indexOfToken = activeTokensList.findIndex(tokenId);
+    if (indexOfToken === -1) {
+      writeLog("warn", "Closing device's token not found", { tokenId });
+      return;
+    }
+    writeLog("log", "Removing token", {
+      tokenId,
+      remaining: activeTokensList.size() - 1,
+    });
+    activeTokensList.removeIndex(indexOfToken);
+  }
+  logger.log(`Listening at ws://127.0.0.1:${options.port}`);
 
   /**
    * Perform checks when a new connection (WebSocket or HTTP POST) is
@@ -631,16 +644,16 @@ export default async function RxPairedServer(options: ParsedOptions) {
     checkers.checkDeviceMessageLimit();
 
     /** The log that is about to be written on the disk in the log file. */
-    let storedMsg = "";
+    let storedMsg: string | undefined;
 
     /** The log that is about to be sent to the inspector. */
-    let inspectorMsg = "";
+    let inspectorMsg: string | undefined;
 
     /** The log that is about to be added to the history.
      * History is sent once an inspector connect on an already started
      * session so it can have the logs before he actually connect.
      */
-    let historyMsg = "";
+    let historyMsg: string | undefined;
 
     if (message.length > options.maxLogLength) {
       return;
@@ -648,6 +661,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
     if (message === "pong") {
       return;
     }
+
     if (message.startsWith("Init ")) {
       writeLog("log", "received Init message", {
         address: request.socket.remoteAddress,
@@ -668,6 +682,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
       } else {
         const timestamp = +matches[1];
         const dateMs = +matches[2];
+        tokenMetadata.clearPlayers();
         tokenMetadata.setDeviceInitData({ timestamp, dateMs });
         const { history, maxHistorySize } = tokenMetadata.getCurrentHistory();
         inspectorMsg = JSON.stringify({
@@ -683,7 +698,15 @@ export default async function RxPairedServer(options: ParsedOptions) {
       try {
         /* eslint-disable */ // In a try so anything goes :p
         const parsed = JSON.parse(message);
-        if (parsed.type === "eval-result" || parsed.type === "eval-error") {
+
+        if (parsed.type === "register-player") {
+          processPlayerRegistrationMessage(parsed);
+        } else if (parsed.type === "unregister-player") {
+          processPlayerUnregistrationMessage(parsed);
+        } else if (
+          parsed.type === "eval-result" ||
+          parsed.type === "eval-error"
+        ) {
           inspectorMsg = message;
         }
       } catch (_) {
@@ -694,25 +717,95 @@ export default async function RxPairedServer(options: ParsedOptions) {
       storedMsg = message;
       historyMsg = message;
     }
-    if (historyMsg) {
+    if (historyMsg !== undefined) {
       tokenMetadata.addLogToHistory(historyMsg);
     }
-    if (storedMsg && options.shouldCreateLogFiles) {
+    if (storedMsg !== undefined && options.shouldCreateLogFiles) {
       appendFile(logFileName, storedMsg + "\n", function () {
         // on finished. Do nothing for now.
       });
     }
 
-    if (tokenMetadata.getDeviceInitData() === null) {
-      return;
+    if (
+      tokenMetadata.getDeviceInitData() !== null &&
+      inspectorMsg !== undefined
+    ) {
+      for (const inspector of tokenMetadata.inspectors) {
+        sendMessageToInspector(
+          inspectorMsg,
+          inspector.webSocket,
+          request,
+          tokenMetadata.tokenId,
+        );
+      }
     }
-    for (const inspector of tokenMetadata.inspectors) {
-      sendMessageToInspector(
-        inspectorMsg,
-        inspector.webSocket,
-        request,
-        tokenMetadata.tokenId,
-      );
+
+    return;
+
+    function processPlayerRegistrationMessage(
+      msg: PlayerRegistrationMessage,
+    ): void {
+      const playerId = msg.value.playerId;
+      let commands = msg.value.commands;
+      if (
+        typeof playerId !== "string" ||
+        !Array.isArray(commands) ||
+        commands.some((k) => typeof k !== "string")
+      ) {
+        writeLog(
+          "warn",
+          'Error while trying to parse a "player-register" message from ' +
+            "a device. Is it valid?",
+          {
+            address: request.socket.remoteAddress,
+            tokenId: tokenMetadata.tokenId,
+            message,
+          },
+        );
+        return;
+      }
+      writeLog("log", `Register player "${playerId}"`, {
+        address: request.socket.remoteAddress,
+        tokenId: tokenMetadata.tokenId,
+      });
+      const playerObj = { playerId, commands };
+      tokenMetadata.registerPlayer(playerObj);
+      inspectorMsg = JSON.stringify({
+        type: "register-player",
+        value: playerObj,
+      });
+      storedMsg = JSON.stringify({
+        type: "register-player",
+        value: playerObj,
+      });
+    }
+
+    function processPlayerUnregistrationMessage(
+      msg: PlayerUnregistrationMessage,
+    ): void {
+      const playerId = msg.value.playerId;
+      if (typeof playerId !== "string") {
+        writeLog(
+          "warn",
+          'Error while trying to parse a "player-unregister" message from ' +
+            "a device. Is it valid?",
+          {
+            address: request.socket.remoteAddress,
+            tokenId: tokenMetadata.tokenId,
+            message,
+          },
+        );
+        return;
+      }
+      tokenMetadata.unregisterPlayer(playerId);
+      inspectorMsg = JSON.stringify({
+        type: "unregister-player",
+        value: { playerId },
+      });
+      storedMsg = JSON.stringify({
+        type: "unregister-player",
+        value: { playerId },
+      });
     }
   }
 }
@@ -733,14 +826,44 @@ function sendMessageToInspector(
   }
 }
 
+/**
+ * Type for an `"eval"` message as might be sent by the inspector to execute
+ * various instructions.
+ */
 interface EvalMessage {
+  /** Discriminant. */
   type: "eval";
   value: {
+    /** The code to execute on the device. */
     instruction: string;
+    /** Identifier allowing to identify the response associated to that request. */
     id: string;
   };
 }
 
+/**
+ * Type for a `"command"` message as might be sent by the inspector to control
+ * a player.
+ */
+interface CommandMessage {
+  /** Discriminant. */
+  type: "command";
+  value: {
+    /** The command to call. */
+    command: string;
+    /** Identifier for the player on which the command should be called.. */
+    playerId: string;
+    /** Optional arguments for that command */
+    args: string[];
+  };
+}
+
+/**
+ * Returns `true` if the given message data received from the inspector is
+ * considered an `"eval"` message.
+ * @param {*} msg - Message data received from the inspector.
+ * @returns {Boolean} - `true` if the message is an `"eval"` message.
+ */
 function isEvalMessage(msg: unknown): msg is EvalMessage {
   return (
     typeof msg === "object" &&
@@ -753,6 +876,32 @@ function isEvalMessage(msg: unknown): msg is EvalMessage {
   );
 }
 
+/**
+ * Returns `true` if the given message data received from the inspector is
+ * considered an `"command"` message.
+ * @param {*} msg - Message data received from the inspector.
+ * @returns {Boolean} - `true` if the message is an `"command"` message.
+ */
+function isCommandMessage(msg: unknown): msg is CommandMessage {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as CommandMessage).type === "command" &&
+    typeof (msg as CommandMessage).value === "object" &&
+    (msg as CommandMessage).value !== null &&
+    typeof (msg as CommandMessage).value.playerId === "string" &&
+    typeof (msg as CommandMessage).value.command === "string" &&
+    Array.isArray((msg as CommandMessage).value.args) &&
+    (msg as CommandMessage).value.args.every((a) => typeof a === "string")
+  );
+}
+
+/**
+ * Log both on the console and on the log file if set.
+ * @param {string} level - Severity level for the log.
+ * @param {string} msg - Message to log.
+ * @param {Object} [infos={}] - Supplementary context for that log.
+ */
 function writeLog(
   level: "log" | "warn",
   msg: string,
@@ -854,4 +1003,32 @@ function getLogFileName(tokenId: string, deviceInfo: DeviceInfo): string {
     tokenId +
     ".txt"
   );
+}
+
+/**
+ * Message as received by the device and sent to the inspector for `Player
+ * registration` messages.
+ */
+interface PlayerRegistrationMessage {
+  /** Identify that this is a "Player registration" message. */
+  type: "register-player";
+  value: {
+    /** Unique identifier for that player under the corresponding connection. */
+    playerId: string;
+    /** Commands available on that player. */
+    commands: string[];
+  };
+}
+
+/**
+ * Message as received by the device and sent to the inspector for `Player
+ * de-registration` messages.
+ */
+interface PlayerUnregistrationMessage {
+  /** Identify that this is a "Player de-registration" message. */
+  type: "unregister-player";
+  value: {
+    /** Unique identifier for that player under the corresponding connection. */
+    playerId: string;
+  };
 }

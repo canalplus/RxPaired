@@ -12,6 +12,8 @@
     <style>
       body {
         font-family: sans-serif;
+        margin: 0;
+        padding: 0;
       }
       body.light {
         background-color: #e5e5e5;
@@ -294,6 +296,21 @@
         color: #d3ffcf;
       }
 
+      .live-debugger-container {
+        display: flex;
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        flex-direction: column;
+      }
+
+      .live-debugger-body {
+        overflow: auto;
+      }
+
       .module-wrapper {
         margin: 5px;
         float: left;
@@ -369,6 +386,112 @@
 
       .module-body {
         padding: 6px;
+      }
+
+      .control-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        margin: 0;
+        color: #000;
+        border-top: 1px solid #ccc;
+        background: linear-gradient(to bottom right, #f6f6f6, #c6c6c6);
+      }
+
+      .control-panel-player-nav {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .control-panel-player-nav-arrow {
+        background: none;
+        border: none;
+        cursor: pointer;
+        fontsize: 14px;
+        padding: 4px;
+      }
+
+      .control-panel-line {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin: 0;
+        padding: 5px 5px;
+        gap: 5px;
+        flex-wrap: wrap;
+        /* overflow: auto; */
+      }
+
+      .dark .control-panel {
+        background: linear-gradient(to bottom right, #000, #333);
+      }
+
+      .control-panel-btn {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 3px;
+        /* background-color: #f6f6f6; */
+        background-color: transparent;
+        color: #000;
+        border: 1px solid #ccc;
+        padding: 5px;
+      }
+
+      .control-panel-btn.active {
+        background-color: #000;
+        color: #fff;
+      }
+
+      .control-panel-btn svg {
+        height: 12px;
+        width: 12px;
+      }
+
+      .dark .control-panel-btn {
+        /* background-color: #3e3e3e; */
+        background-color: transparent;
+        color: #fff;
+        border: 1px solid #333;
+      }
+      .dark .control-panel-btn.active {
+        /* background-color: #3e3e3e; */
+        color: #000;
+        background-color: #fff;
+      }
+
+      .control-panel-btn button:disabled svg {
+        color: #555;
+      }
+
+      .dark .control-panel {
+        background-color: #000;
+        color: #fff;
+        border-top: 1px solid #444;
+      }
+
+      .control-panel-title svg {
+        height: 24px;
+        width: 24px;
+      }
+
+      .control-panel-title {
+        font-weight: bold;
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .control-panel-buttons {
+        display: flex;
+        gap: 5px;
+        margin: 5px;
+        flex-wrap: wrap;
       }
 
       .howto-body {

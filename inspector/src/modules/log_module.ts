@@ -292,9 +292,6 @@ export default function LogModule({
 
   return {
     body: strHtml`<div>${[logHeaderElt, allFiltersElt, logBodyElt]}</div>`,
-    clear() {
-      clearLogs();
-    },
     destroy() {
       clearTimeout(timeoutInterval);
       timeoutInterval = undefined;

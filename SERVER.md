@@ -58,7 +58,7 @@ page, as browsers will generally block such "unsecure" requests when coming from
 a "secure" web page.
 
 To work-around this issue, it is for now recommended to set up an HTTPS proxy,
-which will redirect to the right RxPaired port(s).
+which will redirect to the right RxPaired port.
 This can be done by using server softwares like [Apache](https://httpd.apache.org/)
 or [Nginx](https://www.nginx.com/) on servers with a valid certificate, **OR**,
 if you don't have such server at hand, solutions like [ngrok](https://ngrok.com/).
@@ -112,18 +112,18 @@ to read this chapter unless either:
 
 - You're curious about how it works.
 
-### Through the inspector port
+### To/From the Inspector
 
-Messages communicated through the inspector port (see server flags) are intended
-for exchanges with the RxPaired-inspector web inspector.
+This chapter specifies the possible exchanges between inspectors (the web page
+used for inspection) and the RxPaired's server.
 
-If the server is configured with a password, like it is by default, **all** URLs
-reached through the inspector port should first begin by the `/<SERVER_PASSWORD>`
-path, where `<SERVER_PASSWORD>` is the server's password, then concatenating on
-top of it the following paths.
+If the server is configured with a password, like it is by default, **all** the
+following URLs in this chapter MUST first begin by the `/!inspector/<SERVER_PASSWORD>`
+path, where `<SERVER_PASSWORD>` is the server's password, then concatenating on top
+of it the following paths.
 
-If the server is configured with no password, the following paths should be used
-directly.
+If the server is configured with no password, **all** following URLs MUST just be
+prefixed by an `/!inspector` path.
 
 #### `/!list`
 
@@ -262,6 +262,34 @@ Various messages may be sent by the server through that WebSocket connection:
       If `history` has the same length, then it may be that older logs
       have been removed from it to respect that limit.
 
+- **Player registration**: Notify that a new player can be remotely controlled
+  on that WebSocket and announce which commands are available.
+
+  - `type` (string): Always set to `"register-player"`. This allows the server
+    and inspectors to identify that this is a "Player registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier that should be used when
+      interacting with that player through "Command" messages.
+
+    - `commands` (Array.\<string\>): Available "commands" implemented for that
+      player. Example of commands: `stop`, `reload`, `pause` etc.
+
+      The list of possible commands are listed in the [CLIENT.md](./CLIENT.md)
+      file.
+
+- **Player de-registration**: Notify that a previously registered player
+  (through a "Player registration" message) is not available anymore.
+
+  - `type` (string): Always set to `"unregister-player"`. This allows the server
+    and inspectors to identify that this is a "Player de-registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier used when sending the "Player
+      registration" message for that player.
+
 - **Evaluation results**: An inspector can send JavaScript code to be executed
   on the device, those are called "evaluations" by the RxPaired-server.
 
@@ -368,6 +396,32 @@ through that route the following types of messages:
   the message an inspector should send after receiving a `ping` message
   through that same connection.
 
+- **Command**: Those messages allow an inspector to remotely control a specific
+  player on the device (e.g. to pause playback, seek, change tracks etc.)
+  provided that device advertised those capabilities through "Player
+  registration" messages.
+
+  An inspector may know which players are available and which commands on each
+  of them are available by listening to "Player registration" and "Player
+  de-registration" message the server sent to it on that same connection.
+
+  "Command" messages as sent by the inspector are UTF-8 encoded JSON with the
+  following keys:
+
+  - `type` (string): Always set to `"command"`. This allows the server and
+    device to identify that this is a "Command" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Identify the player on which that command should be
+      executed. This is the same identifier than one advertised through a
+      "Player registration" message.
+
+    - `command` (string): The command to execute on that player. This is a
+      `string` that should have been previously advertised in the
+      correspondinding "Player registration" message for that `playerId`
+      (present in the array under the key `commands` on that message).
+
 - **Evaluation**: Those messages allow an inspector to ask the device to
   execute some JavaScript code present in this message.
 
@@ -462,17 +516,14 @@ Like for `/!persist/<TOKEN_ID>/<EXPIRATION_TIME_MS>`, but:
 - if a token with that name was already created, it will be made persistent if
   it wasn't already but its original expiration date will remain unchanged.
 
-### Through the device port
+### To/From the Device
 
-Messages communicated through the device port (see server flags) are intended
-for exchanges with the RxPaired-client running on the device.
-
-Unlike messages communicated through this inspector, those do not need to have
-the server's password (if set) prepended to its routes, unless explicitely
-specified.
+This chapter specifies the possible exchanges between devices (thanks to the
+script running on the inspected device) and the RxPaired's server.
 
 The following subchapters will list the various routes exposed by the
-RxPaired-server through the device port.
+RxPaired-server for the device. Unlike URLs intended for the inspector, no prefix
+should be added unless explicitly specified.
 
 #### `/<TOKEN_ID>`
 
@@ -481,8 +532,8 @@ Where:
 - `<TOKEN_ID>` is a string composed only of alphanumeric characters.
 
   That has been previously explicitely created by an RxPaired-inspector
-  **AND** that is still considered "active" (see routes exposed by the
-  inspector ports for more information on what this implies).
+  **AND** that is still considered "active" (see routes exposed for the
+  inspector for more information on what this implies).
 
 ##### Behavior
 
@@ -492,8 +543,8 @@ RxPaired-inspectors currently listening to that token.
 
 Note that **only one device at a time** can maintain a connection on that
 specific token. If multiple WebSocket connections for the same token are done
-at the same time on the device port of the RxPaired-server, all but the last
-devices linked to that token will be disconnected.
+at the same time on the RxPaired-server, all but the last devices linked to
+that token will be disconnected.
 
 ##### Messages sent by the server
 
@@ -517,6 +568,26 @@ Messages may be sent by the server through that WebSocket connection:
   even when no message has been received in a long time, as some applications
   (such as servers) might automatically decide to close the connection
   otherwise.
+
+- **Command**: Those messages originates from the RxPaired-inspector and allows
+  it to interact with a player on this device (e.g. to pause playback, seek,
+  change tracks etc.).
+
+  "Command" messages are UTF-8 encoded JSON with the following keys:
+
+  - `type` (string): Always set to `"command"`. This allows to identify that
+    this is a "Command" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Identify the player on which that command should be
+      executed. This is the same identifier than one advertised through a
+      previous "Player registration" message from that device.
+
+    - `command` (string): The command to execute on that player. This is a
+      `string` that should have been previously advertised in the
+      correspondinding "Player registration" message for that `playerId`
+      (present in the array under the key `commands` on that message).
 
 - **Evaluation**: Those messages originates from an RxPaired-inspector and
   allows it to execute some JavaScript code present in this message.
@@ -567,7 +638,35 @@ Messages may be sent by the server through that WebSocket connection:
   the message an inspector should send after receiving a `ping` message
   through that same connection.
 
-- **Evaluation results**: When an instruction, through an Evaluation message
+- **Player registration**: Notify that a new player can be remotely controlled
+  on that WebSocket and announce which commands are available.
+
+  - `type` (string): Always set to `"register-player"`. This allows the server
+    and inspectors to identify that this is a "Player registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier that should be used when
+      interacting with that player through "Command" messages.
+
+    - `commands` (Array.\<string\>): Available "commands" implemented for that
+      player. Example of commands: `stop`, `reload`, `pause` etc.
+
+      The list of possible commands are listed in the [CLIENT.md](./CLIENT.md)
+      file.
+
+- **Player de-registration**: Notify that a previously registered player
+  (through a "Player registration" message) is not available anymore.
+
+  - `type` (string): Always set to `"unregister-player"`. This allows the server
+    and inspectors to identify that this is a "Player de-registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier used when sending the "Player
+      registration" message for that player.
+
+- **Evaluation results**: When an instruction, through an "Evaluation message"
   of that same WebSocket connection, executes with success, the device should
   send back a corresponding "Evaluation result" message described here.
 
@@ -651,18 +750,18 @@ Where:
 **NOTE**: This route could have been disabled depending on the flags associated
 to the RxPaired-server.
 
-Same behavior and messages than for the `/<TOKEN_ID>` route on the device port
-excepted that a token will be automatically generated by the server. This token
-will have the default token expiration (see server flags) and be removed based
-on the same rules that non-persistent tokens generated through the inspector
-port (see corresponding route).
+Same behavior and messages than for the `/<TOKEN_ID>` route excepted that a
+token will be automatically generated by the server. This token will have the
+default token expiration (see server flags) and be removed based on the same
+rules that non-persistent tokens generated through the inspector (see
+corresponding route).
 
 This token wont be communicated to the device, but:
 
 - If the right flags have been set, it will be present in the name of the
   corresponding log file generated on disk by the server.
 
-- The `/!list` route, exposed on the inspector port, will list that token,
+- The `/!list` route, exposed to the inspector, will list that token,
   allowing RxPaired-inspectors to listen to it.
 
 #### Fallback to HTTP POST
