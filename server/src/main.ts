@@ -310,7 +310,7 @@ export default async function RxPairedServer(options: ParsedOptions) {
       );
       ws.close();
       return;
-    } else if (!/[a-z0-9]+/.test(tokenId)) {
+    } else if (!/[A-Za-z0-9]+/.test(tokenId)) {
       writeLog("warn", "Received inspector request with invalid token.", {
         tokenId,
       });
