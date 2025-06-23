@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 /** @see `rx-paired.config.json` file */
-declare const _INSPECTOR_DEBUGGER_URL_: string;
+declare const __RX_PAIRED_SERVER_URL__: string;
 declare const __DEVICE_SCRIPT_URL__: string;
 declare const __DISABLE_PASSWORD__: boolean;
 /* eslint-enable @typescript-eslint/naming-convention */
@@ -9,7 +9,7 @@ declare const __DISABLE_PASSWORD__: boolean;
  * URL of the server (relative to the client).
  * Localhost by default
  */
-export const SERVER_URL = _INSPECTOR_DEBUGGER_URL_;
+export const SERVER_URL = __RX_PAIRED_SERVER_URL__;
 
 /** URL to the JavaScript script that should run on the device. */
 export const CLIENT_SCRIPT_URL = __DEVICE_SCRIPT_URL__;

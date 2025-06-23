@@ -3,12 +3,12 @@
 This directory is the home of the `RxPaired-server`, the "server" part of the
 RxPaired tool.
 
-Its role is to listen and emit on two WebSocket ports:
+Its role is to listen and emit on its WebSocket port for:
 
-- one for communication with the tested device
+- metadata coming from the tested device
 
-- the other for communication to the web inspector, the webpage allowing to
-  inspect what's going on on the device.
+- information requests coming from the web inspector (the webpage allowing to
+  inspect what's going on on the device).
 
 To be able to match devices to the right web inspectors, a system of "tokens" is
 in place. Tokens are strings which identify logs coming from a specific device,

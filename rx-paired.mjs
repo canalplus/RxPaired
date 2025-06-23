@@ -3,8 +3,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import {
-  DEFAULT_INSPECTOR_PORT,
-  DEFAULT_DEVICE_PORT,
+  DEFAULT_SERVER_PORT,
   DEFAULT_HISTORY_SIZE,
   DEFAULT_MAX_TOKEN_DURATION,
   DEFAULT_MAX_LOG_LENGTH,
@@ -32,24 +31,19 @@ if (argv.includes("-h") || argv.includes("--help")) {
 
 let password = null;
 let noInspector = false;
-let inspectorPort;
-let httpPort;
-let devicePort;
+let port;
+let staticPort;
 
 for (let i = 2; i < argv.length; i++) {
   const arg = argv[i].trim();
   switch (arg) {
-    case "--device-port":
+    case "--port":
       i++;
-      devicePort = checkIntArg(arg, argv[i]);
+      port = checkIntArg(arg, argv[i]);
       break;
-    case "--inspector-port":
+    case "--static-port":
       i++;
-      inspectorPort = checkIntArg(arg, argv[i]);
-      break;
-    case "--http-port":
-      i++;
-      httpPort = checkIntArg(arg, argv[i]);
+      staticPort = checkIntArg(arg, argv[i]);
       break;
     case "--no-inspector":
       noInspector = true;
@@ -75,19 +69,17 @@ for (let i = 2; i < argv.length; i++) {
   }
 }
 
-startRxPaired({ password, devicePort, inspectorPort, noInspector, httpPort });
+startRxPaired({ password, port, noInspector, staticPort });
 
 export default function startRxPaired({
   password,
-  httpPort,
-  devicePort,
-  inspectorPort,
+  staticPort,
+  port,
   noInspector,
 } = {}) {
   const noPassword = typeof password !== "string" || password.length === 0;
   const serverOpts = {
-    inspectorPort: noInspector ? -1 : (inspectorPort ?? DEFAULT_INSPECTOR_PORT),
-    devicePort: devicePort ?? DEFAULT_DEVICE_PORT,
+    port: port ?? DEFAULT_SERVER_PORT,
     shouldCreateLogFiles: true,
     password: noPassword ? null : password,
     historySize: DEFAULT_HISTORY_SIZE,
@@ -103,10 +95,9 @@ export default function startRxPaired({
     disableNoToken: false,
   };
 
-  const staticServerPort = httpPort ?? DEFAULT_STATIC_SERVER_PORT;
-  const deviceDebuggerUrl = `ws://127.0.0.1:${serverOpts.devicePort}`;
+  const staticServerPort = staticPort ?? DEFAULT_STATIC_SERVER_PORT;
+  const serverUrl = `ws://127.0.0.1:${serverOpts.port}`;
   const deviceScriptUrl = `http://127.0.0.1:${staticServerPort}/client.js`;
-  const inspectorDebuggerUrl = `ws://127.0.0.1:${serverOpts.inspectorPort}`;
 
   let tokenValue = null;
   if (noInspector) {
@@ -134,7 +125,7 @@ export default function startRxPaired({
           watch: false,
           plugins: [],
           deviceScriptUrl,
-          inspectorDebuggerUrl,
+          serverUrl,
           noPassword,
         }).catch((err) => {
           console.error(
@@ -148,7 +139,7 @@ export default function startRxPaired({
       minify: true,
       watch: false,
       plugins: [],
-      deviceDebuggerUrl,
+      serverUrl,
       tokenValue,
     }).catch((err) => {
       console.error(
@@ -242,16 +233,13 @@ Options:
   --password <alphanumeric>      Optional password used by the server.
                                  Ignore for no password.
 
-  --http-port <port>             Port used to deliver the inspector HTTP page and the
+  --port <port>                  Port used for WebSocket communications.
+                                 Defaults to ${DEFAULT_SERVER_PORT}.
+
+  --static-port <port>           Port used to deliver the inspector HTTP page and the
                                  device's script.
                                  Defaults to ${DEFAULT_STATIC_SERVER_PORT}.
                                  You may set it to "-1" to disable the static server.
-
-  --device-port <port>           Port used for device-to-server communication.
-                                 Defaults to ${DEFAULT_DEVICE_PORT}.
-
-  --inspector-port <port>        Port used for inspector-to-server communication.
-                                 Defaults to ${DEFAULT_INSPECTOR_PORT}.
 
   --no-inspector                 If this option is present, we won't build and serve the
                                  inspector page nor rely on it for "token" creation.
