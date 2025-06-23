@@ -1,8 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Use now only one port for client <-> server <-> inspector. `--device-port` and `--inspector-port` both merged in just `--port` [#31]
+
+### Bug fixes
+
+- server: Autorize A-Z (upper-cases) characters
+- server: Fix date inclusion in log filename
+
+### Other improvements
+
+- inspector: Remove clear button on the log module, it was poorly understood and not really useful [#33]
+- server: Remove IP part from log filename
+- client: set LogFormat = "full" on the RxPlayer class if one
+
 ## v0.3.0 (2024-03-17)
 
-## Breaking changes
+### Breaking changes
 
 - Rely on new `rx-paired.config.json` configuration file instead of `.npmrc` [#29]
 
