@@ -262,6 +262,34 @@ Various messages may be sent by the server through that WebSocket connection:
       If `history` has the same length, then it may be that older logs
       have been removed from it to respect that limit.
 
+- **Player registration**: Notify that a new player can be remotely controlled
+  on that WebSocket and announce which commands are available.
+
+  - `type` (string): Always set to `"register-player"`. This allows the server
+    and inspectors to identify that this is a "Player registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier that should be used when
+      interacting with that player through "Command" messages.
+
+    - `commands` (Array.\<string\>): Available "commands" implemented for that
+      player. Example of commands: `stop`, `reload`, `pause` etc.
+
+      The list of possible commands are listed in the [CLIENT.md](./CLIENT.md)
+      file.
+
+- **Player de-registration**: Notify that a previously registered player
+  (through a "Player registration" message) is not available anymore.
+
+  - `type` (string): Always set to `"unregister-player"`. This allows the server
+    and inspectors to identify that this is a "Player de-registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier used when sending the "Player
+      registration" message for that player.
+
 - **Evaluation results**: An inspector can send JavaScript code to be executed
   on the device, those are called "evaluations" by the RxPaired-server.
 
@@ -367,6 +395,32 @@ through that route the following types of messages:
 - **pong**: Pong messages are just an UTF-8-encoded `pong` string, which is
   the message an inspector should send after receiving a `ping` message
   through that same connection.
+
+- **Command**: Those messages allow an inspector to remotely control a specific
+  player on the device (e.g. to pause playback, seek, change tracks etc.)
+  provided that device advertised those capabilities through "Player
+  registration" messages.
+
+  An inspector may know which players are available and which commands on each
+  of them are available by listening to "Player registration" and "Player
+  de-registration" message the server sent to it on that same connection.
+
+  "Command" messages as sent by the inspector are UTF-8 encoded JSON with the
+  following keys:
+
+  - `type` (string): Always set to `"command"`. This allows the server and
+    device to identify that this is a "Command" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Identify the player on which that command should be
+      executed. This is the same identifier than one advertised through a
+      "Player registration" message.
+
+    - `command` (string): The command to execute on that player. This is a
+      `string` that should have been previously advertised in the
+      correspondinding "Player registration" message for that `playerId`
+      (present in the array under the key `commands` on that message).
 
 - **Evaluation**: Those messages allow an inspector to ask the device to
   execute some JavaScript code present in this message.
@@ -515,6 +569,26 @@ Messages may be sent by the server through that WebSocket connection:
   (such as servers) might automatically decide to close the connection
   otherwise.
 
+- **Command**: Those messages originates from the RxPaired-inspector and allows
+  it to interact with a player on this device (e.g. to pause playback, seek,
+  change tracks etc.).
+
+  "Command" messages are UTF-8 encoded JSON with the following keys:
+
+  - `type` (string): Always set to `"command"`. This allows to identify that
+    this is a "Command" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Identify the player on which that command should be
+      executed. This is the same identifier than one advertised through a
+      previous "Player registration" message from that device.
+
+    - `command` (string): The command to execute on that player. This is a
+      `string` that should have been previously advertised in the
+      correspondinding "Player registration" message for that `playerId`
+      (present in the array under the key `commands` on that message).
+
 - **Evaluation**: Those messages originates from an RxPaired-inspector and
   allows it to execute some JavaScript code present in this message.
 
@@ -564,7 +638,35 @@ Messages may be sent by the server through that WebSocket connection:
   the message an inspector should send after receiving a `ping` message
   through that same connection.
 
-- **Evaluation results**: When an instruction, through an Evaluation message
+- **Player registration**: Notify that a new player can be remotely controlled
+  on that WebSocket and announce which commands are available.
+
+  - `type` (string): Always set to `"register-player"`. This allows the server
+    and inspectors to identify that this is a "Player registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier that should be used when
+      interacting with that player through "Command" messages.
+
+    - `commands` (Array.\<string\>): Available "commands" implemented for that
+      player. Example of commands: `stop`, `reload`, `pause` etc.
+
+      The list of possible commands are listed in the [CLIENT.md](./CLIENT.md)
+      file.
+
+- **Player de-registration**: Notify that a previously registered player
+  (through a "Player registration" message) is not available anymore.
+
+  - `type` (string): Always set to `"unregister-player"`. This allows the server
+    and inspectors to identify that this is a "Player de-registration" message.
+
+  - `value` (object): Object with the following keys:
+
+    - `playerId` (string): Unique identifier used when sending the "Player
+      registration" message for that player.
+
+- **Evaluation results**: When an instruction, through an "Evaluation message"
   of that same WebSocket connection, executes with success, the device should
   send back a corresponding "Evaluation result" message described here.
 

@@ -149,6 +149,51 @@ export function isInitLog(log: string): boolean {
   return false;
 }
 
+export function isRegisterPlayerLog(log: string): boolean {
+  if (log.startsWith("{")) {
+    /* eslint-disable @typescript-eslint/restrict-template-expressions */
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+    /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+    try {
+      const signal = JSON.parse(log) as PlayerRegistrationMessage;
+
+      return (
+        signal.type === "register-player" &&
+        typeof signal.value.playerId === "string" &&
+        Array.isArray(signal.value.commands) &&
+        signal.value.commands.every((c: unknown) => typeof c === "string")
+      );
+    } catch {
+      /* eslint-enable @typescript-eslint/restrict-template-expressions */
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access */
+      return false;
+    }
+  }
+  return false;
+}
+
+export function isUnregisterPlayerLog(log: string): boolean {
+  if (log.startsWith("{")) {
+    /* eslint-disable @typescript-eslint/restrict-template-expressions */
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+    /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+    try {
+      const signal = JSON.parse(log) as PlayerUnregistrationMessage;
+      return (
+        signal.type === "unregister-player" &&
+        typeof signal.value.playerId === "string"
+      );
+    } catch {
+      /* eslint-enable @typescript-eslint/restrict-template-expressions */
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access */
+      return false;
+    }
+  }
+  return false;
+}
+
 export function parseAndGenerateInitLog(log: string): {
   log: string;
   dateAtPageLoad: number;
@@ -180,4 +225,32 @@ export function parseAndGenerateInitLog(log: string): {
     /* eslint-enable @typescript-eslint/no-unsafe-member-access */
     return defaultLog;
   }
+}
+
+/**
+ * Message as received by the device and sent to the inspector for `Player
+ * registration` messages.
+ */
+interface PlayerRegistrationMessage {
+  /** Identify that this is a "Player registration" message. */
+  type: "register-player";
+  value: {
+    /** Unique identifier for that player under the corresponding connection. */
+    playerId: string;
+    /** Commands available on that player. */
+    commands: string[];
+  };
+}
+
+/**
+ * Message as received by the device and sent to the inspector for `Player
+ * de-registration` messages.
+ */
+interface PlayerUnregistrationMessage {
+  /** Identify that this is a "Player de-registration" message. */
+  type: "unregister-player";
+  value: {
+    /** Unique identifier for that player under the corresponding connection. */
+    playerId: string;
+  };
 }

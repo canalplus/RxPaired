@@ -20,6 +20,14 @@ export function createElement(
   opts?: CreateElementOptions | undefined,
 ): HTMLButtonElement;
 export function createElement(
+  elementName: "select",
+  opts?: CreateElementOptions | undefined,
+): HTMLSelectElement;
+export function createElement(
+  elementName: "option",
+  opts?: CreateElementOptions | undefined,
+): HTMLOptionElement;
+export function createElement(
   elementName: "a",
   opts?: CreateElementOptions | undefined,
 ): HTMLLinkElement;
