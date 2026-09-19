@@ -90,6 +90,12 @@ function init(currentScriptSrc, playerClass, silent) {
    */
   const MAX_LOG_LENGTH = 2000;
 
+  /** Duration represented by each runtime performance snapshot. */
+  const PERFORMANCE_SNAPSHOT_INTERVAL_MS = 10000;
+
+  /** Minimum Event Timing duration collected by the browser. */
+  const PERFORMANCE_EVENT_DURATION_THRESHOLD_MS = 40;
+
   /** Method used to send log. */
   let sendLog = (log) => {
     /* Push to internal queue until initialization. */
@@ -165,7 +171,7 @@ function init(currentScriptSrc, playerClass, silent) {
         const time = performance.now().toFixed(2);
         sendLog(`${time} ${namespace} ${argStr}`);
       }
-      if (!Boolean(silent)) {
+      if (!silent) {
         return oldConsoleFn.apply(this, args);
       }
     };
@@ -274,6 +280,8 @@ function init(currentScriptSrc, playerClass, silent) {
         : window.TextDecoder;
   const escape = window.escape;
 
+  startRuntimePerformanceCollection();
+
   /**
    * Function to trigger when there's a global uncaught error, such as on window.
    * @param {*} err
@@ -297,6 +305,320 @@ function init(currentScriptSrc, playerClass, silent) {
   function formatAndSendLog(namespace, log) {
     const time = performance.now().toFixed(2);
     sendLog(`${time} [${namespace}] ${log}`);
+  }
+
+  /**
+   * Collect runtime responsiveness signals in low-volume periodic snapshots.
+   * PerformanceEntry instances and DOM elements never leave the inspected page.
+   */
+  function startRuntimePerformanceCollection() {
+    let windowStart = performance.now();
+    const longTasks = createLongTaskCollector();
+    const longAnimationFrames = createLongAnimationFrameCollector();
+    const interactions = createInteractionCollector();
+    const videoQuality = createVideoQualityCollector();
+    const collectors = [
+      longTasks,
+      longAnimationFrames,
+      interactions,
+      videoQuality,
+    ];
+    const snapshotInterval = setInterval(
+      sendSnapshot,
+      PERFORMANCE_SNAPSHOT_INTERVAL_MS,
+    );
+    spyRemovers.push(function () {
+      clearInterval(snapshotInterval);
+      for (const collector of collectors) {
+        collector.dispose();
+      }
+    });
+
+    function sendSnapshot() {
+      const windowEnd = performance.now();
+      if (windowEnd <= windowStart) {
+        return;
+      }
+      sendPerformanceSnapshot({
+        startTime: windowStart,
+        endTime: windowEnd,
+        ...longTasks.takeSnapshot(),
+        ...longAnimationFrames.takeSnapshot(),
+        ...interactions.takeSnapshot(),
+        ...videoQuality.takeSnapshot(),
+      });
+      windowStart = windowEnd;
+    }
+
+    function sendPerformanceSnapshot(snapshot) {
+      formatAndSendLog("Performance", safeJsonStringify(snapshot));
+    }
+  }
+
+  function createLongTaskCollector() {
+    let count = 0;
+    let duration = 0;
+    let longest = 0;
+    const observer = createPerformanceObserver("longtask", onEntries);
+
+    return { takeSnapshot, dispose };
+
+    function onEntries(entries) {
+      for (const entry of entries) {
+        count++;
+        duration += entry.duration;
+        longest = Math.max(longest, entry.duration);
+      }
+    }
+
+    function takeSnapshot() {
+      drainPerformanceObserver(observer, onEntries);
+      const snapshot = {
+        longTaskCount: observer === null ? null : count,
+        longTaskDuration: observer === null ? null : duration,
+        longestLongTask: observer === null ? null : longest,
+      };
+      count = 0;
+      duration = 0;
+      longest = 0;
+      return snapshot;
+    }
+
+    function dispose() {
+      if (observer !== null) {
+        observer.disconnect();
+      }
+    }
+  }
+
+  function createLongAnimationFrameCollector() {
+    let count = 0;
+    let duration = 0;
+    let blockingDuration = 0;
+    let longest = 0;
+    const observer = createPerformanceObserver(
+      "long-animation-frame",
+      onEntries,
+    );
+
+    return { takeSnapshot, dispose };
+
+    function onEntries(entries) {
+      for (const entry of entries) {
+        count++;
+        duration += entry.duration;
+        if (typeof entry.blockingDuration === "number") {
+          blockingDuration += entry.blockingDuration;
+        }
+        longest = Math.max(longest, entry.duration);
+      }
+    }
+
+    function takeSnapshot() {
+      drainPerformanceObserver(observer, onEntries);
+      const snapshot = {
+        longAnimationFrameCount: observer === null ? null : count,
+        longAnimationFrameDuration: observer === null ? null : duration,
+        longAnimationFrameBlockingDuration:
+          observer === null ? null : blockingDuration,
+        longestLongAnimationFrame: observer === null ? null : longest,
+      };
+      count = 0;
+      duration = 0;
+      blockingDuration = 0;
+      longest = 0;
+      return snapshot;
+    }
+
+    function dispose() {
+      if (observer !== null) {
+        observer.disconnect();
+      }
+    }
+  }
+
+  function createInteractionCollector() {
+    let count = 0;
+    let longest = 0;
+    let longestInputDelay = 0;
+    let longestName = "";
+    let seenIds = {};
+    const observer = createPerformanceObserver(
+      "event",
+      onEntries,
+      PERFORMANCE_EVENT_DURATION_THRESHOLD_MS,
+    );
+
+    return { takeSnapshot, dispose };
+
+    function onEntries(entries) {
+      for (const entry of entries) {
+        if (entry.interactionId === 0) {
+          continue;
+        }
+        const interactionId = String(entry.interactionId);
+        if (seenIds[interactionId] !== true) {
+          seenIds[interactionId] = true;
+          count++;
+        }
+        const inputDelay = Math.max(entry.processingStart - entry.startTime, 0);
+        if (entry.duration > longest) {
+          longest = entry.duration;
+          longestName = entry.name;
+        }
+        longestInputDelay = Math.max(longestInputDelay, inputDelay);
+      }
+    }
+
+    function takeSnapshot() {
+      drainPerformanceObserver(observer, onEntries);
+      const snapshot = {
+        interactionCount: observer === null ? null : count,
+        longestInteraction: observer === null ? null : longest,
+        longestInputDelay: observer === null ? null : longestInputDelay,
+        longestInteractionName: observer === null ? null : longestName,
+      };
+      count = 0;
+      longest = 0;
+      longestInputDelay = 0;
+      longestName = "";
+      seenIds = {};
+      return snapshot;
+    }
+
+    function dispose() {
+      if (observer !== null) {
+        observer.disconnect();
+      }
+    }
+  }
+
+  function createVideoQualityCollector() {
+    let baselines = [];
+
+    // Establish an initial baseline when video elements already exist.
+    collectVideoPlaybackQuality();
+
+    return { takeSnapshot: collectVideoPlaybackQuality, dispose };
+
+    function collectVideoPlaybackQuality() {
+      const videoElements = document.getElementsByTagName("video");
+      let qualityAvailable = false;
+      let sampledElementCount = 0;
+      let totalFrames = 0;
+      let droppedFrames = 0;
+      const nextBaselines = [];
+      for (let i = 0; i < videoElements.length; i++) {
+        const videoElement = videoElements[i];
+        if (typeof videoElement.getVideoPlaybackQuality !== "function") {
+          continue;
+        }
+        let quality;
+        try {
+          quality = videoElement.getVideoPlaybackQuality();
+        } catch (_) {
+          continue;
+        }
+        if (!isValidVideoPlaybackQuality(quality)) {
+          continue;
+        }
+        qualityAvailable = true;
+        const previousQuality = findBaseline(videoElement);
+        nextBaselines.push({
+          element: videoElement,
+          totalVideoFrames: quality.totalVideoFrames,
+          droppedVideoFrames: quality.droppedVideoFrames,
+        });
+        if (
+          previousQuality === undefined ||
+          quality.totalVideoFrames < previousQuality.totalVideoFrames ||
+          quality.droppedVideoFrames < previousQuality.droppedVideoFrames
+        ) {
+          continue;
+        }
+        sampledElementCount++;
+        totalFrames +=
+          quality.totalVideoFrames - previousQuality.totalVideoFrames;
+        droppedFrames +=
+          quality.droppedVideoFrames - previousQuality.droppedVideoFrames;
+      }
+      baselines = nextBaselines;
+      return {
+        videoElementCount: videoElements.length,
+        sampledVideoElementCount: qualityAvailable ? sampledElementCount : null,
+        totalVideoFrames: qualityAvailable ? totalFrames : null,
+        droppedVideoFrames: qualityAvailable ? droppedFrames : null,
+      };
+    }
+
+    function findBaseline(videoElement) {
+      for (const baseline of baselines) {
+        if (baseline.element === videoElement) {
+          return baseline;
+        }
+      }
+    }
+
+    function dispose() {
+      baselines = [];
+    }
+  }
+
+  function isValidVideoPlaybackQuality(quality) {
+    return (
+      quality !== null &&
+      typeof quality === "object" &&
+      typeof quality.totalVideoFrames === "number" &&
+      isFinite(quality.totalVideoFrames) &&
+      quality.totalVideoFrames >= 0 &&
+      typeof quality.droppedVideoFrames === "number" &&
+      isFinite(quality.droppedVideoFrames) &&
+      quality.droppedVideoFrames >= 0 &&
+      quality.droppedVideoFrames <= quality.totalVideoFrames
+    );
+  }
+
+  /**
+   * @param {string} entryType
+   * @param {Function} callback
+   * @param {number} [durationThreshold]
+   * @returns {PerformanceObserver|null}
+   */
+  function createPerformanceObserver(entryType, callback, durationThreshold) {
+    const PerformanceObserver = window.PerformanceObserver;
+    if (typeof PerformanceObserver !== "function") {
+      return null;
+    }
+    const supportedEntryTypes = PerformanceObserver.supportedEntryTypes;
+    if (
+      Array.isArray(supportedEntryTypes) &&
+      supportedEntryTypes.indexOf(entryType) === -1
+    ) {
+      return null;
+    }
+    try {
+      const observer = new PerformanceObserver(function (list) {
+        callback(list.getEntries());
+      });
+      observer.observe(
+        durationThreshold === undefined
+          ? { type: entryType }
+          : { type: entryType, durationThreshold },
+      );
+      return observer;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function drainPerformanceObserver(observer, callback) {
+    if (observer === null) {
+      return;
+    }
+    const entries = observer.takeRecords();
+    if (entries.length > 0) {
+      callback(entries);
+    }
   }
 
   /**

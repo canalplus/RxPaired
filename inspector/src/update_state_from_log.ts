@@ -16,10 +16,10 @@ export default function updateStateFromLog(
   newLogId: number,
 ): void {
   const timestamp = parseFloat(newLog);
-  const cleanedLog = removeLogPrefix(newLog);
+  const { message, namespace } = parseLogPrefix(newLog);
   for (const proc of LogProcessors) {
-    if (proc.filter(cleanedLog)) {
-      const updateRes = proc.processor(cleanedLog, newLogId, timestamp);
+    if (proc.filter(message, namespace)) {
+      const updateRes = proc.processor(message, newLogId, timestamp);
       for (const update of updateRes) {
         state.updateState(
           update.property,
@@ -64,12 +64,12 @@ export function updateStatesFromLogGroup(
       break;
     }
     const currLog = logs[i];
-    const cleanedLog = removeLogPrefix(currLog[0]);
+    const { message, namespace } = parseLogPrefix(currLog[0]);
     const timestamp = parseFloat(currLog[0]);
     for (let checkIdx = 0; checkIdx < remainingChecks.length; checkIdx++) {
       const currCheck = remainingChecks[checkIdx];
-      if (currCheck.filter(cleanedLog)) {
-        const updates = currCheck.processor(cleanedLog, currLog[1], timestamp);
+      if (currCheck.filter(message, namespace)) {
+        const updates = currCheck.processor(message, currLog[1], timestamp);
         for (const update of updates) {
           if (!updatedStates.has(update.property)) {
             pendingUpdates.push(update);
@@ -99,12 +99,16 @@ export function updateStatesFromLogGroup(
 }
 
 /**
- * Removes log prefix in format "123.456 [LEVEL] " from the start of a string
+ * Parses a log prefix in format "123.456 [NAMESPACE] ".
  * More performant than regex for this specific pattern
  * @param {string} str - Input string
- * @returns {string} - String with prefix removed, or original if no match
+ * @returns {Object} - Parsed message and namespace, if found
  */
-function removeLogPrefix(str: string): string {
+function parseLogPrefix(str: string): {
+  message: string;
+  namespace: string | undefined;
+} {
+  const unparsed = { message: str, namespace: undefined };
   let i = 0;
   const len = str.length;
 
@@ -115,7 +119,7 @@ function removeLogPrefix(str: string): string {
 
   // Must have at least one digit and then either a decimal point or a space
   if (i === 0 || i >= len || (str[i] !== "." && str[i] !== " ")) {
-    return str;
+    return unparsed;
   }
 
   if (str[i] === ".") {
@@ -129,7 +133,7 @@ function removeLogPrefix(str: string): string {
 
     // Must have at least one digit after decimal and then a space
     if (i === decimalStart || i >= len || str[i] !== " ") {
-      return str;
+      return unparsed;
     }
   }
 
@@ -137,7 +141,7 @@ function removeLogPrefix(str: string): string {
 
   // Must have opening bracket
   if (i >= len || str[i] !== "[") {
-    return str;
+    return unparsed;
   }
 
   i++; // Skip opening bracket
@@ -156,17 +160,18 @@ function removeLogPrefix(str: string): string {
 
   // Must have at least one word character, closing bracket, and space
   if (i === levelStart || i >= len || str[i] !== "]") {
-    return str;
+    return unparsed;
   }
+
+  const namespace = str.substring(levelStart, i);
 
   i++; // Skip closing bracket
 
   if (i >= len || str[i] !== " ") {
-    return str;
+    return unparsed;
   }
 
   i++; // Skip final space
 
-  // Return substring after the prefix
-  return str.substring(i);
+  return { message: str.substring(i), namespace };
 }
