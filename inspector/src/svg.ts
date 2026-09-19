@@ -1,12 +1,3 @@
-/** SVG for the "full-width" button on inspector modules. */
-export const fullWidthSvg = `<svg fill="currentColor" height="800px" width="800px" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" xml:space="preserve"><g><g><path d="M508.484,249.098L320.751,112.565c-2.603-1.894-6.042-2.159-8.892-0.7c-2.859,1.459-4.659,4.395-4.659,7.603v85.333H204.8    v-85.333c0-3.209-1.8-6.144-4.659-7.603c-2.859-1.442-6.289-1.186-8.892,0.7L3.516,249.098C1.306,250.703,0,253.271,0,256.002    s1.306,5.299,3.516,6.903l187.733,136.533c2.594,1.894,6.025,2.142,8.892,0.7c2.859-1.459,4.659-4.395,4.659-7.603v-85.333h102.4    v85.333c0,3.209,1.801,6.144,4.659,7.603c1.22,0.623,2.552,0.93,3.874,0.93c1.766,0,3.533-0.546,5.018-1.63l187.733-136.533    c2.21-1.604,3.516-4.173,3.516-6.903S510.694,250.703,508.484,249.098z"/></g></g></svg>`;
-
-/** SVG for the "half-width" button on inspector modules. */
-export const halfWidthSvg =
-  '<svg width="15px" height="15px" viewBox="5 5 5 5" fill="currentColor" ' +
-  'xmlns="http://www.w3.org/2000/svg"><path d="M8.5 4.5L5.5 ' +
-  '7.5L8.5 10.5"></path></svg>';
-
 /** SVG for the "move-down" button on inspector modules. */
 export const moveDownSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor">' +

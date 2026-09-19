@@ -9,7 +9,12 @@ import generateLiveDebuggingPage from "./pages/live_debugging";
 import generatePasswordPage from "./pages/password";
 import generatePostDebuggerPage from "./pages/post-debugger";
 import generateTokenPage from "./pages/token";
-import { displayError, getPageInfo, isTokenValid } from "./utils";
+import {
+  displayError,
+  getDefaultModuleOrder,
+  getPageInfo,
+  isTokenValid,
+} from "./utils";
 
 let currentPageCleanUp: (() => void) | undefined | void;
 
@@ -36,6 +41,28 @@ function initializeGlobalConfig() {
     }
   }
 
+  // Discard saved IDs that no longer represent movable modules.
+  const moduleIds = new Set(getDefaultModuleOrder());
+  let normalizedModuleConfig = false;
+  for (const prop of [
+    STATE_PROPS.CLOSED_MODULES,
+    STATE_PROPS.MINIMIZED_MODULES,
+    STATE_PROPS.MODULES_ORDER,
+  ] as const) {
+    const storedIds = currentModuleConfig[prop] ?? [];
+    const currentIds = storedIds.filter((id) => moduleIds.has(id));
+    if (currentIds.length !== storedIds.length) {
+      currentModuleConfig[prop] = currentIds;
+      normalizedModuleConfig = true;
+    }
+  }
+  if (normalizedModuleConfig) {
+    localStorage.setItem(
+      MODULE_CONFIG_LS_ITEM,
+      JSON.stringify(currentModuleConfig),
+    );
+  }
+
   let currentMode = configState.getCurrentState(STATE_PROPS.CSS_MODE);
   if (currentMode === undefined) {
     currentMode =
@@ -53,9 +80,14 @@ function initializeGlobalConfig() {
     currentModuleConfig[STATE_PROPS.CLOSED_MODULES] ?? [],
   );
   configState.updateState(
-    STATE_PROPS.WIDTH_RATIOS,
+    STATE_PROPS.LOG_PANE_WIDTH,
     UPDATE_TYPE.REPLACE,
-    currentModuleConfig[STATE_PROPS.WIDTH_RATIOS] ?? {},
+    currentModuleConfig[STATE_PROPS.LOG_PANE_WIDTH] ?? 50,
+  );
+  configState.updateState(
+    STATE_PROPS.LOG_PANE_COLLAPSED,
+    UPDATE_TYPE.REPLACE,
+    currentModuleConfig[STATE_PROPS.LOG_PANE_COLLAPSED] ?? false,
   );
   configState.updateState(
     STATE_PROPS.MINIMIZED_MODULES,
@@ -86,10 +118,17 @@ function initializeGlobalConfig() {
       JSON.stringify(currentModuleConfig),
     );
   });
-  configState.subscribe(STATE_PROPS.WIDTH_RATIOS, () => {
-    const closedModules =
-      configState.getCurrentState(STATE_PROPS.WIDTH_RATIOS) ?? {};
-    currentModuleConfig[STATE_PROPS.WIDTH_RATIOS] = closedModules;
+  configState.subscribe(STATE_PROPS.LOG_PANE_WIDTH, () => {
+    currentModuleConfig[STATE_PROPS.LOG_PANE_WIDTH] =
+      configState.getCurrentState(STATE_PROPS.LOG_PANE_WIDTH) ?? 50;
+    localStorage.setItem(
+      MODULE_CONFIG_LS_ITEM,
+      JSON.stringify(currentModuleConfig),
+    );
+  });
+  configState.subscribe(STATE_PROPS.LOG_PANE_COLLAPSED, () => {
+    currentModuleConfig[STATE_PROPS.LOG_PANE_COLLAPSED] =
+      configState.getCurrentState(STATE_PROPS.LOG_PANE_COLLAPSED) ?? false;
     localStorage.setItem(
       MODULE_CONFIG_LS_ITEM,
       JSON.stringify(currentModuleConfig),

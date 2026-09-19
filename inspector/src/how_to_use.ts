@@ -1,15 +1,7 @@
 import strHtml from "str-html";
-import { CLIENT_SCRIPT_URL } from "../constants";
+import { CLIENT_SCRIPT_URL } from "./constants";
 
-export default function HowToUseModule({
-  tokenId,
-}: {
-  tokenId?: string | undefined;
-}) {
-  if (tokenId === undefined) {
-    console.error("Cannot initialize HowToUseModule: no token");
-    return null;
-  }
+export default function createHowToUseContent(tokenId: string): HTMLElement {
   const noteInspectorBeforeClient = strHtml`<span>
     <span class="emphasized">IMPORTANT</span>:
     You should always first start this inspector page with the wanted token
@@ -39,12 +31,11 @@ sendInstruction(\`console.warn("USER-AGENT:", navigator.userAgent)\`)
   </span>`;
 
   const moduleLayoutTutorialElt = strHtml`<div>
-    ${`You can move the "modules" around through the buttons
-       located on their top right (hover it for a description).
-       When taking "half-width", they are put in
-       from left to right first, then from top to bottom.
-       To reset the layout, click on the "clear page config" button on the top
-       right of this page.`}
+    ${`The logs stay beside the information modules on wide screens.
+       Drag the border between the panes to resize them. Use the button in the
+       Logs title bar to hide or show the logs. Move information modules with
+       the buttons in their title bars. To reset the layout, click the
+       "clear page config" button at the top of this page.`}
   </div>`;
   if (CLIENT_SCRIPT_URL === "") {
     const howToBodyElt = strHtml`<div>
@@ -63,7 +54,7 @@ sendInstruction(\`console.warn("USER-AGENT:", navigator.userAgent)\`)
       <br>
       ${moduleLayoutTutorialElt}
     </div>`;
-    return { body: howToBodyElt };
+    return howToBodyElt;
   }
 
   const liElt1 = strHtml`<li>
@@ -146,5 +137,5 @@ sendInstruction(\`console.warn("USER-AGENT:", navigator.userAgent)\`)
     ${moduleLayoutTutorialElt}
   </div>`;
 
-  return { body: howToBodyElt };
+  return howToBodyElt;
 }

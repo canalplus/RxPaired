@@ -296,9 +296,99 @@
 
       .module-wrapper {
         margin: 5px;
-        float: left;
-        width: 100%;
+        box-sizing: border-box;
+        width: calc(100% - 10px);
         overflow: auto;
+      }
+
+      .inspector-help {
+        margin: 8px 5px 12px;
+        border: 1px solid #cbd4da;
+        background-color: #f4f7f9;
+      }
+
+      .dark .inspector-help {
+        border-color: #3b454a;
+        background-color: #171c20;
+      }
+
+      .inspector-help summary {
+        font-style: normal;
+        font-weight: normal;
+        padding: 7px 10px;
+      }
+
+      .inspector-help > div {
+        padding: 4px 12px 12px;
+      }
+
+      .inspector-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, var(--log-pane-width, 50%)) minmax(
+            0,
+            1fr
+          );
+        position: relative;
+        align-items: start;
+      }
+
+      .inspector-workspace.logs-collapsed {
+        grid-template-columns: 120px minmax(0, 1fr);
+      }
+
+      .inspector-log-pane,
+      .inspector-modules-pane {
+        min-width: 0;
+      }
+
+      .inspector-log-pane {
+        position: sticky;
+        top: 8px;
+        max-height: calc(100vh - 16px);
+        overflow: auto;
+      }
+
+      .inspector-pane-splitter {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: var(--log-pane-width, 50%);
+        width: 14px;
+        transform: translateX(-50%);
+        cursor: col-resize;
+        touch-action: none;
+      }
+
+      .inspector-pane-splitter:focus-visible {
+        outline: 2px solid #4781a8;
+      }
+
+      .inspector-workspace.logs-collapsed .inspector-pane-splitter,
+      .inspector-workspace.logs-collapsed
+        .inspector-log-pane
+        > .module-wrapper
+        > .module-body {
+        display: none;
+      }
+
+      .inspector-modules-pane > .module-wrapper {
+        display: block;
+      }
+
+      @media (max-width: 850px) {
+        .inspector-workspace,
+        .inspector-workspace.logs-collapsed {
+          display: block;
+        }
+
+        .inspector-log-pane {
+          position: static;
+          max-height: none;
+        }
+
+        .inspector-pane-splitter {
+          display: none;
+        }
       }
 
       .light .module-wrapper {
@@ -371,14 +461,78 @@
         padding: 6px;
       }
 
-      .howto-body {
-        padding: 10px;
-      }
-
       .log-body {
         overflow: auto;
-        height: 850px;
+        height: min(60vh, 850px);
+        min-height: 220px;
         resize: vertical;
+      }
+
+      .log-time-controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 0.9em;
+      }
+
+      .log-filters {
+        margin-top: 5px;
+        padding: 5px 8px;
+      }
+
+      .log-filters summary {
+        cursor: pointer;
+        font-size: 0.9em;
+        font-weight: bold;
+      }
+
+      .log-time-control {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+
+      .log-time-control-inputs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 3px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .log-time-range {
+        box-sizing: border-box;
+        flex: 1 1 140px;
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .log-time-control-inputs > input[type="datetime-local"] {
+        box-sizing: border-box;
+        flex: 1 1 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .log-text-controls {
+        display: flex;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .log-text-controls .log-filter {
+        box-sizing: border-box;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .log-exclude-filter {
+        box-sizing: border-box;
+        width: 100%;
       }
 
       .request-history-body {
@@ -440,8 +594,8 @@
 
       .closed-modules {
         margin: 5px;
-        float: left;
-        width: 100%;
+        box-sizing: border-box;
+        width: calc(100% - 10px);
       }
       .light .closed-modules {
         border: 1px solid #b2b5bf;

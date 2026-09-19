@@ -7,7 +7,7 @@ import {
   SERVER_URL,
   STATE_PROPS,
 } from "../constants";
-import createModules from "../create_modules";
+import createWorkspace from "../create_workspace";
 import ObservableState, { UPDATE_TYPE } from "../observable_state";
 import updateStateFromLog, {
   updateStatesFromLogGroup,
@@ -118,7 +118,7 @@ export default function generateLiveDebuggingPage(
     }
   });
 
-  const disposeModules = createModules({
+  const disposeWorkspace = createWorkspace({
     containerElt: modulesContainerElt,
     context: "live-debugging",
     tokenId,
@@ -135,7 +135,7 @@ export default function generateLiveDebuggingPage(
     currentSocket.removeEventListener("error", onWebSocketError);
     currentSocket.removeEventListener("message", onWebSocketMessage);
     currentSocket.close();
-    disposeModules();
+    disposeWorkspace();
     inspectorState.dispose();
     delete (window as unknown as Record<string, unknown>).sendInstruction;
     document.body.removeChild(liveDebuggingBodyElt);
