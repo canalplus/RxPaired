@@ -1,4 +1,5 @@
 import { InspectorState } from "./constants";
+import { parseLogPrefixTime } from "./log_prefix";
 import LogProcessors, { StateUpdate } from "./log_processors";
 import ObservableState, { UPDATE_TYPE } from "./observable_state";
 
@@ -15,7 +16,7 @@ export default function updateStateFromLog(
   newLog: string,
   newLogId: number,
 ): void {
-  const timestamp = parseFloat(newLog);
+  const timestamp = parseLogPrefixTime(newLog)?.timestamp ?? NaN;
   const cleanedLog = removeLogPrefix(newLog);
   for (const proc of LogProcessors) {
     if (proc.filter(cleanedLog)) {
@@ -65,7 +66,7 @@ export function updateStatesFromLogGroup(
     }
     const currLog = logs[i];
     const cleanedLog = removeLogPrefix(currLog[0]);
-    const timestamp = parseFloat(currLog[0]);
+    const timestamp = parseLogPrefixTime(currLog[0])?.timestamp ?? NaN;
     for (let checkIdx = 0; checkIdx < remainingChecks.length; checkIdx++) {
       const currCheck = remainingChecks[checkIdx];
       if (currCheck.filter(cleanedLog)) {
@@ -99,74 +100,15 @@ export function updateStatesFromLogGroup(
 }
 
 /**
- * Removes log prefix in format "123.456 [LEVEL] " from the start of a string
- * More performant than regex for this specific pattern
+ * Removes the timestamp (including any app offset) and namespace from a log.
  * @param {string} str - Input string
  * @returns {string} - String with prefix removed, or original if no match
  */
 function removeLogPrefix(str: string): string {
-  let i = 0;
-  const len = str.length;
-
-  // Skip digits before decimal point
-  while (i < len && str[i] >= "0" && str[i] <= "9") {
-    i++;
-  }
-
-  // Must have at least one digit and then either a decimal point or a space
-  if (i === 0 || i >= len || (str[i] !== "." && str[i] !== " ")) {
+  const prefix = parseLogPrefixTime(str);
+  if (prefix === null) {
     return str;
   }
-
-  if (str[i] === ".") {
-    i++; // Skip decimal point
-
-    // Skip digits after decimal point
-    const decimalStart = i;
-    while (i < len && str[i] >= "0" && str[i] <= "9") {
-      i++;
-    }
-
-    // Must have at least one digit after decimal and then a space
-    if (i === decimalStart || i >= len || str[i] !== " ") {
-      return str;
-    }
-  }
-
-  i++; // Skip space
-
-  // Must have opening bracket
-  if (i >= len || str[i] !== "[") {
-    return str;
-  }
-
-  i++; // Skip opening bracket
-
-  // Skip word characters (letters, digits, underscore)
-  const levelStart = i;
-  while (
-    i < len &&
-    ((str[i] >= "a" && str[i] <= "z") ||
-      (str[i] >= "A" && str[i] <= "Z") ||
-      (str[i] >= "0" && str[i] <= "9") ||
-      str[i] === "_")
-  ) {
-    i++;
-  }
-
-  // Must have at least one word character, closing bracket, and space
-  if (i === levelStart || i >= len || str[i] !== "]") {
-    return str;
-  }
-
-  i++; // Skip closing bracket
-
-  if (i >= len || str[i] !== " ") {
-    return str;
-  }
-
-  i++; // Skip final space
-
-  // Return substring after the prefix
-  return str.substring(i);
+  const match = prefix.message.match(/^\[[A-Za-z0-9_]+\] (.*)$/s);
+  return match === null ? str : match[1];
 }

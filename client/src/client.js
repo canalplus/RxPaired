@@ -151,19 +151,25 @@ function init(currentScriptSrc, playerClass, silent) {
     const oldConsoleFn = console[meth];
     const namespace = `[${meth}]`;
     console[meth] = function (...args) {
-      const argStr = args.map(processArg).join(" ");
+      const captureTime = performance.now().toFixed(2);
 
       // The RxPlayer might already have set the timestamp + namespace format
       if (
         args.length >= 3 &&
         args[1] === namespace &&
-        /^\d+\.\d+$/.test(args[0])
+        /^\d+(?:\.\d+)?$/.test(args[0])
       ) {
-        sendLog(argStr);
+        const offset = Number(
+          (Number(args[0]) - Number(captureTime)).toFixed(2),
+        );
+        sendLog(
+          `${captureTime}${offset === 0 ? "" : offset > 0 ? `+${offset}` : offset} ${namespace} ${args.slice(2).map(processArg).join(" ")}`,
+        );
       } else {
         // Else, add it now
-        const time = performance.now().toFixed(2);
-        sendLog(`${time} ${namespace} ${argStr}`);
+        sendLog(
+          `${captureTime} ${namespace} ${args.map(processArg).join(" ")}`,
+        );
       }
       if (!Boolean(silent)) {
         return oldConsoleFn.apply(this, args);
@@ -264,7 +270,13 @@ function init(currentScriptSrc, playerClass, silent) {
     });
   }
 
-  sendLog("Init v1 " + performance.now() + " " + Date.now());
+  sendLog(
+    "Init v2 " +
+      performance.now() +
+      " " +
+      Date.now() +
+      " time=capture offset=app-capture",
+  );
 
   const TextDecoder =
     typeof window !== "object"

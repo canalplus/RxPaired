@@ -87,7 +87,15 @@ export default class PersistentTokensStorage {
               } else if (item.initData !== null) {
                 if (
                   typeof item.initData.dateMs !== "number" ||
-                  typeof item.initData.timestamp !== "number"
+                  typeof item.initData.timestamp !== "number" ||
+                  (item.initData.version !== undefined &&
+                    item.initData.version !== 2) ||
+                  (item.initData.version === 2 &&
+                    (item.initData.time !== "capture" ||
+                      item.initData.offset !== "app-capture")) ||
+                  (item.initData.version === undefined &&
+                    (item.initData.time !== undefined ||
+                      item.initData.offset !== undefined))
                 ) {
                   isWellFormatted = false;
                   break;

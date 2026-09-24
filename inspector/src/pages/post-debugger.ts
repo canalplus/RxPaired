@@ -19,7 +19,24 @@ import {
   parseAndGenerateInitLog,
 } from "./utils";
 
-const START_LOG_LINE_REGEXP = /^[0-9]+\.[0-9]{2} \[/;
+const START_LOG_LINE_REGEXP = /^\d+(?:\.\d+)?(?:[+-]\d+(?:\.\d+)?)? \[/;
+
+function startsLogRecord(input: string): boolean {
+  const firstCharCode = input.charCodeAt(0);
+  if (firstCharCode >= 48 && firstCharCode <= 57) {
+    return START_LOG_LINE_REGEXP.test(input);
+  }
+  if (!input.startsWith("{")) {
+    return false;
+  }
+
+  const lineEnd = input.indexOf("\n");
+  let firstLine = lineEnd === -1 ? input : input.substring(0, lineEnd);
+  if (firstLine.endsWith("\r")) {
+    firstLine = firstLine.substring(0, firstLine.length - 1);
+  }
+  return isInitLog(firstLine);
+}
 
 /**
  * @param {Object} configState
@@ -124,6 +141,7 @@ function createImportFileButton(
       const dataStr = loadTarget.result;
       const logs: Array<[string, number]> = [];
       let dateAtPageLoad;
+      let hasInitLog = false;
       let remaininStrConsidered = dataStr;
       let id = 0;
       while (remaininStrConsidered.length > 0) {
@@ -134,15 +152,8 @@ function createImportFileButton(
           const strAfterBrk = remaininStrConsidered.substring(
             indexOfBrk + 1 + offset,
           );
-          const nextCharCode = strAfterBrk.charCodeAt(0);
-          if (
-            !isNaN(nextCharCode) &&
-            nextCharCode >= 48 &&
-            nextCharCode <= 57
-          ) {
-            if (START_LOG_LINE_REGEXP.test(strAfterBrk)) {
-              break;
-            }
+          if (startsLogRecord(strAfterBrk)) {
+            break;
           }
           offset += indexOfBrk + 1;
           indexOfBrk = strAfterBrk.indexOf("\n");
@@ -154,8 +165,25 @@ function createImportFileButton(
         }
         const logLine = remaininStrConsidered.substring(0, indexOfEnd);
 
+        let isSessionInit = false;
         if (isInitLog(logLine)) {
           dateAtPageLoad = parseAndGenerateInitLog(logLine).dateAtPageLoad;
+          isSessionInit = true;
+        } else {
+          const legacyInit = logLine.match(
+            /^(\d+(?:\.\d+)?) \[Init\] Local-Date:(\d+)/,
+          );
+          if (legacyInit !== null) {
+            dateAtPageLoad = Number(legacyInit[2]) - Number(legacyInit[1]);
+            isSessionInit = true;
+          }
+        }
+        if (isSessionInit) {
+          if (hasInitLog) {
+            logs.length = 0;
+            id = 0;
+          }
+          hasInitLog = true;
         }
         logs.push([logLine, id++]);
         remaininStrConsidered = remaininStrConsidered.substring(indexOfEnd + 1);

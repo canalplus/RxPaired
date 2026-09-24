@@ -20,7 +20,8 @@ import { generatePassword } from "./utils.js";
  * The first number is the timestamp in milliseconds and the second the
  * corresponding date on the device at the time the timestamp was generated.
  */
-const INIT_REGEX = /^Init v1 ([0-9]+(?:\.[0-9]+)?) ([0-9]+(?:\.[0-9]+)?)$/;
+const INIT_REGEX =
+  /^Init v(?:1 ([0-9]+(?:\.[0-9]+)?) ([0-9]+(?:\.[0-9]+)?)|2 ([0-9]+(?:\.[0-9]+)?) ([0-9]+(?:\.[0-9]+)?) time=capture offset=app-capture)$/;
 
 /**
  * A device can rely on HTTP POST when WebSockets are not available.
@@ -366,13 +367,11 @@ export default async function RxPairedServer(options: ParsedOptions) {
 
     const deviceInitData = existingToken.getDeviceInitData();
     if (deviceInitData !== null) {
-      const { timestamp, dateMs } = deviceInitData;
       const { history, maxHistorySize } = existingToken.getCurrentHistory();
       const message = JSON.stringify({
         type: "Init",
         value: {
-          timestamp,
-          dateMs,
+          ...deviceInitData,
           history,
           maxHistorySize,
         },
@@ -658,17 +657,27 @@ export default async function RxPairedServer(options: ParsedOptions) {
           },
         );
       } else {
-        const timestamp = +matches[1];
-        const dateMs = +matches[2];
-        tokenMetadata.setDeviceInitData({ timestamp, dateMs });
+        const timestamp = +(matches[1] ?? matches[3]);
+        const dateMs = +(matches[2] ?? matches[4]);
+        const initData =
+          matches[3] !== undefined
+            ? {
+                timestamp,
+                dateMs,
+                version: 2 as const,
+                time: "capture" as const,
+                offset: "app-capture" as const,
+              }
+            : { timestamp, dateMs };
+        tokenMetadata.setDeviceInitData(initData);
         const { history, maxHistorySize } = tokenMetadata.getCurrentHistory();
         inspectorMsg = JSON.stringify({
           type: "Init",
-          value: { timestamp, dateMs, history, maxHistorySize },
+          value: { ...initData, history, maxHistorySize },
         });
         storedMsg = JSON.stringify({
           type: "Init",
-          value: { timestamp, dateMs },
+          value: initData,
         });
       }
     } else if (message[0] === "{") {

@@ -18,6 +18,7 @@ import {
   createDarkLightModeButton,
   createTimeRepresentationSwitch,
   isInitLog,
+  minimalInitLog,
   parseAndGenerateInitLog,
 } from "./utils";
 
@@ -191,9 +192,11 @@ export default function generateLiveDebuggingPage(
         const signal = JSON.parse(event.data);
 
         if (isInitLog(event.data)) {
-          const { dateAtPageLoad, log } = parseAndGenerateInitLog(event.data);
+          const { dateAtPageLoad } = parseAndGenerateInitLog(event.data);
           clearInspectorState(inspectorState, logViewState);
-          let updates: Array<[string, number]> = [[log, nextLogId++]];
+          let updates: Array<[string, number]> = [
+            [minimalInitLog(event.data), nextLogId++],
+          ];
           if (signal.value?.history?.length > 0) {
             updates = updates.concat(
               (signal.value.history as string[]).map((str) => [
@@ -213,9 +216,7 @@ export default function generateLiveDebuggingPage(
             dateAtPageLoad ?? Date.now(),
           );
 
-          if (!hasSelectedLog) {
-            updateStatesFromLogGroup(inspectorState, updates);
-          }
+          updateStatesFromLogGroup(inspectorState, updates);
           inspectorState.commitUpdates();
           logViewState.commitUpdates();
         } else if (signal.type === "eval-result") {
@@ -418,7 +419,9 @@ function exportLogs(logViewState: ObservableState<LogViewState>): void {
   document.body.appendChild(aElt);
   const logsHistory =
     logViewState.getCurrentState(STATE_PROPS.LOGS_HISTORY) ?? [];
-  const logExport = logsHistory.map(([log, _ts]) => log).join("\n");
+  const logExport = logsHistory
+    .map(([log, _ts]) => minimalInitLog(log))
+    .join("\n");
   const blob = new Blob([logExport], { type: "octet/stream" });
   const url = window.URL.createObjectURL(blob);
   aElt.href = url;
