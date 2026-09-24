@@ -194,3 +194,36 @@ export function parseAndGenerateInitLog(log: string): {
     return defaultLog;
   }
 }
+
+/** Remove history from a live Init signal before storing or exporting it. */
+export function minimalInitLog(log: string): string {
+  try {
+    const signal: unknown = JSON.parse(log);
+    if (
+      typeof signal === "object" &&
+      signal !== null &&
+      "type" in signal &&
+      signal.type === "Init" &&
+      "value" in signal &&
+      typeof signal.value === "object" &&
+      signal.value !== null &&
+      "timestamp" in signal.value &&
+      "dateMs" in signal.value
+    ) {
+      const value = signal.value as Record<string, unknown>;
+      const initValue: Record<string, unknown> = {
+        timestamp: value.timestamp,
+        dateMs: value.dateMs,
+      };
+      for (const key of ["version", "time", "offset"] as const) {
+        if (key in value) {
+          initValue[key] = value[key];
+        }
+      }
+      return JSON.stringify({ type: "Init", value: initValue });
+    }
+  } catch {
+    // Keep unrecognized lines unchanged.
+  }
+  return log;
+}

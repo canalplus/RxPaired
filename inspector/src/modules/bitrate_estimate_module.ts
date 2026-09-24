@@ -132,11 +132,8 @@ function createBitrateEstimateChart(
       STATE_PROPS.BITRATE_ESTIMATE,
     );
     if (bitrateEstimates !== undefined && bitrateEstimates.length > 0) {
-      const lastDate =
-        bitrateEstimates.length === 0
-          ? null
-          : bitrateEstimates[bitrateEstimates.length - 1].timestamp;
-      const minimumTime = Math.max(0, (lastDate ?? 0) - TIME_SAMPLES_MS);
+      const lastDate = bitrateEstimates[bitrateEstimates.length - 1].timestamp;
+      const minimumTime = Math.max(0, lastDate - TIME_SAMPLES_MS);
       let i;
       for (i = bitrateEstimates.length - 1; i >= 1; i--) {
         if (bitrateEstimates[i].timestamp <= minimumTime) {
