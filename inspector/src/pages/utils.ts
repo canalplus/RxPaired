@@ -60,7 +60,16 @@ export function createClearStoredConfigButton(
       UPDATE_TYPE.REPLACE,
       [],
     );
-    configState.updateState(STATE_PROPS.WIDTH_RATIOS, UPDATE_TYPE.REPLACE, {});
+    configState.updateState(
+      STATE_PROPS.LOG_PANE_WIDTH,
+      UPDATE_TYPE.REPLACE,
+      50,
+    );
+    configState.updateState(
+      STATE_PROPS.LOG_PANE_COLLAPSED,
+      UPDATE_TYPE.REPLACE,
+      false,
+    );
     configState.updateState(
       STATE_PROPS.MODULES_ORDER,
       UPDATE_TYPE.REPLACE,
@@ -71,7 +80,8 @@ export function createClearStoredConfigButton(
   configState.subscribe(STATE_PROPS.CLOSED_MODULES, check);
   configState.subscribe(STATE_PROPS.MODULES_ORDER, check);
   configState.subscribe(STATE_PROPS.MINIMIZED_MODULES, check);
-  configState.subscribe(STATE_PROPS.WIDTH_RATIOS, check);
+  configState.subscribe(STATE_PROPS.LOG_PANE_WIDTH, check);
+  configState.subscribe(STATE_PROPS.LOG_PANE_COLLAPSED, check);
   check();
 
   function check() {
@@ -79,8 +89,10 @@ export function createClearStoredConfigButton(
       configState.getCurrentState(STATE_PROPS.CLOSED_MODULES) ?? [];
     const minimizedModules =
       configState.getCurrentState(STATE_PROPS.MINIMIZED_MODULES) ?? [];
-    const widthRatios =
-      configState.getCurrentState(STATE_PROPS.WIDTH_RATIOS) ?? {};
+    const logPaneWidth =
+      configState.getCurrentState(STATE_PROPS.LOG_PANE_WIDTH) ?? 50;
+    const logPaneCollapsed =
+      configState.getCurrentState(STATE_PROPS.LOG_PANE_COLLAPSED) ?? false;
     const modulesOrder =
       configState.getCurrentState(STATE_PROPS.MODULES_ORDER) ?? [];
     const defaultModuleOrder = getDefaultModuleOrder();
@@ -93,7 +105,8 @@ export function createClearStoredConfigButton(
     buttonElt.disabled =
       closedModules.length === 0 &&
       minimizedModules.length === 0 &&
-      Object.keys(widthRatios).length === 0 &&
+      logPaneWidth === 50 &&
+      !logPaneCollapsed &&
       hasDefaultModuleOrder;
   }
   return buttonElt;

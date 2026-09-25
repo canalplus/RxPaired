@@ -9,12 +9,12 @@ import {
   createCompositeElement,
   createElement,
 } from "./dom-utils";
+import createHowToUseContent from "./how_to_use";
+import createLogView from "./log_view";
 import modules, { ModuleInformation } from "./modules/index";
 import ObservableState, { UPDATE_TYPE } from "./observable_state";
 import {
   closeSvg,
-  fullWidthSvg,
-  halfWidthSvg,
   maximizeSvg,
   minimizeSvg,
   moveDownSvg,
@@ -23,19 +23,17 @@ import {
 import { getDefaultModuleOrder } from "./utils";
 
 /**
- * The entry point for the creation of the whole "module system" (the small
- * blocks looking like various windows).
+ * Create the inspector workspace with a fixed log pane and movable modules.
  *
- * Will create and insert the various modules, found inside `configState`, in
- * the given `containerElt`.
+ * The module order and pane layout come from `configState`.
  *
  * Supplementary information is also necessary for both stylisation and module
  * configuration.
  * @param {Object} config
  * @returns {Function} - Call this function to clean up all resources
- * `createModules` have created. Should be called when the page is disposed.
+ * the workspace created. Should be called when the page is disposed.
  */
-export default function createModules({
+export default function createWorkspace({
   containerElt,
   context,
   tokenId,
@@ -62,7 +60,6 @@ export default function createModules({
     configState.commitUpdates();
   }
 
-  let someModuleWasMissing = false;
   const modulesInOrder = [];
   const leftModulesToIterateOn = modules.filter(({ contexts }) =>
     contexts.includes(context),
@@ -79,15 +76,17 @@ export default function createModules({
       modules.find((m) => storedModuleId === m.moduleId) === undefined
     ) {
       console.warn(`Stored module id ${storedModuleId} does not exist anymore`);
-      someModuleWasMissing = true;
     }
   }
 
   // Add all unfound modules at the end
   modulesInOrder.push(...leftModulesToIterateOn);
 
-  if (someModuleWasMissing || leftModulesToIterateOn.length > 0) {
-    const newOrder = modulesInOrder.map(({ moduleId }) => moduleId);
+  const newOrder = modulesInOrder.map(({ moduleId }) => moduleId);
+  if (
+    storedModulesOrder.length !== newOrder.length ||
+    storedModulesOrder.some((moduleId, index) => moduleId !== newOrder[index])
+  ) {
     configState.updateState(
       STATE_PROPS.MODULES_ORDER,
       UPDATE_TYPE.REPLACE,
@@ -99,19 +98,174 @@ export default function createModules({
   /** Callbacks to call on clean-up */
   const onDestroyCbs: Array<() => void> = [];
 
-  const resizeObserver = new ResizeObserver(() =>
-    reSyncModulesPlacement(containerElt),
+  const workspaceElt = createElement("div", {
+    className: "inspector-workspace",
+  });
+  const logPaneElt = createElement("section", {
+    className: "inspector-log-pane",
+  });
+  const modulesPaneElt = createElement("section", {
+    className: "inspector-modules-pane",
+  });
+  const splitterElt = createElement("div", {
+    className: "inspector-pane-splitter",
+  });
+  splitterElt.tabIndex = 0;
+  splitterElt.setAttribute("role", "separator");
+  splitterElt.setAttribute("aria-orientation", "vertical");
+  splitterElt.setAttribute("aria-label", "Resize logs pane");
+  splitterElt.setAttribute("aria-valuemin", "30");
+  splitterElt.setAttribute("aria-valuemax", "70");
+  const collapseButton = createButton({
+    className: "module-btn btn-collapse-logs",
+  });
+  const logContent = createLogView({
+    logView: logViewState,
+    configState,
+  });
+  const logWrapper = createElement("div", { className: "module-wrapper" });
+  const logTitle = createCompositeElement(
+    "div",
+    [
+      createElement("span", {
+        textContent: "Logs",
+        className: "module-title-text",
+      }),
+      createCompositeElement("span", [collapseButton], {
+        className: "module-title-buttons",
+      }),
+    ],
+    { className: "module-title" },
   );
-  onDestroyCbs.push(() => resizeObserver.disconnect());
+  logContent.body.classList.add("module-body");
+  logWrapper.appendChild(logTitle);
+  logWrapper.appendChild(logContent.body);
+  logPaneElt.appendChild(logWrapper);
+  onDestroyCbs.push(logContent.destroy);
+  if (context === "live-debugging" && tokenId !== undefined) {
+    const details = createElement("details", { className: "inspector-help" });
+    details.appendChild(
+      createElement("summary", {
+        textContent: "How to connect and use this tool",
+      }),
+    );
+    details.appendChild(createHowToUseContent(tokenId));
+    containerElt.appendChild(details);
+  }
+  workspaceElt.appendChild(logPaneElt);
+  workspaceElt.appendChild(modulesPaneElt);
+  workspaceElt.appendChild(splitterElt);
+  containerElt.appendChild(workspaceElt);
+  const onPaneConfigChange = () => {
+    const width = Math.max(
+      30,
+      Math.min(
+        70,
+        configState.getCurrentState(STATE_PROPS.LOG_PANE_WIDTH) ?? 50,
+      ),
+    );
+    const collapsed =
+      configState.getCurrentState(STATE_PROPS.LOG_PANE_COLLAPSED) ?? false;
+    workspaceElt.style.setProperty("--log-pane-width", `${width}%`);
+    workspaceElt.classList.toggle("logs-collapsed", collapsed);
+    splitterElt.setAttribute("aria-valuenow", String(width));
+    collapseButton.title = collapsed ? "Show logs" : "Hide logs";
+    collapseButton.setAttribute("aria-label", collapseButton.title);
+    collapseButton.innerHTML = collapsed ? maximizeSvg : minimizeSvg;
+    collapseButton.setAttribute("aria-expanded", String(!collapsed));
+  };
+  let isDragging = false;
+  let draggedWidth = 50;
+  const widthFromPointer = (clientX: number) => {
+    const rect = workspaceElt.getBoundingClientRect();
+    return Math.max(
+      30,
+      Math.min(70, Math.round(((clientX - rect.left) / rect.width) * 100)),
+    );
+  };
+  splitterElt.onpointerdown = (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    isDragging = true;
+    draggedWidth = widthFromPointer(event.clientX);
+    splitterElt.setPointerCapture(event.pointerId);
+    workspaceElt.style.setProperty("--log-pane-width", `${draggedWidth}%`);
+    event.preventDefault();
+  };
+  splitterElt.onpointermove = (event) => {
+    if (!isDragging) {
+      return;
+    }
+    draggedWidth = widthFromPointer(event.clientX);
+    workspaceElt.style.setProperty("--log-pane-width", `${draggedWidth}%`);
+    splitterElt.setAttribute("aria-valuenow", String(draggedWidth));
+  };
+  splitterElt.onpointerup = (event) => {
+    if (!isDragging) {
+      return;
+    }
+    isDragging = false;
+    splitterElt.releasePointerCapture(event.pointerId);
+    configState.updateState(
+      STATE_PROPS.LOG_PANE_WIDTH,
+      UPDATE_TYPE.REPLACE,
+      draggedWidth,
+    );
+    configState.commitUpdates();
+  };
+  splitterElt.onpointercancel = () => {
+    isDragging = false;
+    onPaneConfigChange();
+  };
+  splitterElt.onkeydown = (event) => {
+    const delta =
+      event.key === "ArrowLeft" ? -5 : event.key === "ArrowRight" ? 5 : 0;
+    if (delta === 0) {
+      return;
+    }
+    event.preventDefault();
+    const width = Math.max(
+      30,
+      Math.min(
+        70,
+        (configState.getCurrentState(STATE_PROPS.LOG_PANE_WIDTH) ?? 50) + delta,
+      ),
+    );
+    configState.updateState(
+      STATE_PROPS.LOG_PANE_WIDTH,
+      UPDATE_TYPE.REPLACE,
+      width,
+    );
+    configState.commitUpdates();
+  };
+  collapseButton.onclick = () => {
+    configState.updateState(
+      STATE_PROPS.LOG_PANE_COLLAPSED,
+      UPDATE_TYPE.REPLACE,
+      !(configState.getCurrentState(STATE_PROPS.LOG_PANE_COLLAPSED) ?? false),
+    );
+    configState.commitUpdates();
+  };
+  onDestroyCbs.push(
+    configState.subscribe(STATE_PROPS.LOG_PANE_WIDTH, onPaneConfigChange),
+  );
+  onDestroyCbs.push(
+    configState.subscribe(STATE_PROPS.LOG_PANE_COLLAPSED, onPaneConfigChange),
+  );
+  onPaneConfigChange();
   for (const moduleInfo of modulesInOrder) {
     const moduleWrapperElt = createModule(moduleInfo);
     if (moduleWrapperElt !== null) {
       moduleWrapperElt.dataset.moduleId = moduleInfo.moduleId;
-      containerElt.appendChild(moduleWrapperElt);
-      resizeObserver.observe(moduleWrapperElt);
+      modulesPaneElt.appendChild(moduleWrapperElt);
     }
   }
-  reSyncModulesPlacement(containerElt);
+  const initialClosedModules =
+    modulesPaneElt.getElementsByClassName("closed-modules")[0];
+  if (initialClosedModules !== undefined) {
+    modulesPaneElt.appendChild(initialClosedModules);
+  }
 
   configState.subscribe(STATE_PROPS.MODULES_ORDER, onModulesOrderChange);
   onDestroyCbs.push(() =>
@@ -122,124 +276,51 @@ export default function createModules({
   return () => {
     onDestroyCbs.slice().forEach((disposeFn) => disposeFn());
 
-    const moduleWrapperElts =
-      containerElt.getElementsByClassName("module-wrapper");
-    for (let i = moduleWrapperElts.length - 1; i >= 0; i--) {
-      const moduleWrapperElt = moduleWrapperElts[i];
-      const parent = moduleWrapperElt.parentElement;
-      if (parent !== null) {
-        parent.removeChild(moduleWrapperElt);
-      }
-    }
-
-    const closedModulesElt =
-      containerElt.getElementsByClassName("closed-modules");
-    for (let i = closedModulesElt.length - 1; i >= 0; i--) {
-      const moduleWrapperElt = closedModulesElt[i];
-      const parent = moduleWrapperElt.parentElement;
-      if (parent !== null) {
-        parent.removeChild(moduleWrapperElt);
-      }
-    }
+    containerElt.replaceChildren();
   };
 
   function onModulesOrderChange() {
-    let moduleWrapperElts =
-      containerElt.getElementsByClassName("module-wrapper");
     const newModuleIdOrder =
       configState
         .getCurrentState(STATE_PROPS.MODULES_ORDER)
         ?.filter((id) => activeModuleIds.includes(id)) ?? [];
-
-    let modWrapIdx;
-    for (modWrapIdx = 0; modWrapIdx < moduleWrapperElts.length; modWrapIdx++) {
-      // TODO better check than the `as`
-      const moduleWrapperElt = moduleWrapperElts[modWrapIdx] as HTMLElement;
-      const moduleId = moduleWrapperElt.dataset.moduleId;
-      if (moduleId === undefined) {
-        console.error("An element has an unknown module id");
-        return;
-      } else if (!newModuleIdOrder.includes(moduleId)) {
-        containerElt.removeChild(moduleWrapperElt);
-        resizeObserver.unobserve(moduleWrapperElt);
-        moduleWrapperElts =
-          containerElt.getElementsByClassName("module-wrapper");
-        modWrapIdx--;
-      } else if (modWrapIdx >= newModuleIdOrder.length) {
-        console.error("There should not be more modules than the wanted ones");
-        return;
-      } else {
-        const expectedModuleId = newModuleIdOrder[modWrapIdx];
-        if (expectedModuleId !== moduleId) {
-          let expectedElement;
-          for (
-            let innerIdx = 0;
-            innerIdx < moduleWrapperElts.length;
-            innerIdx++
-          ) {
-            // TODO better check than the `as`
-            const elt = moduleWrapperElts[innerIdx] as HTMLElement;
-            if (elt.dataset.moduleId === expectedModuleId) {
-              expectedElement = elt;
-            }
-          }
-          if (expectedElement === undefined) {
-            const moduleInfo = modules.find(
-              ({ moduleId: modId }) => modId === expectedModuleId,
-            );
-            if (moduleInfo === undefined) {
-              console.error(`Module "${expectedModuleId}" unfound`);
-              return;
-            } else {
-              const newWrapperElt = createModule(moduleInfo);
-              if (newWrapperElt !== null) {
-                newWrapperElt.dataset.moduleId = moduleInfo.moduleId;
-                containerElt.insertBefore(
-                  newWrapperElt,
-                  moduleWrapperElts[modWrapIdx],
-                );
-                resizeObserver.observe(newWrapperElt);
-                moduleWrapperElts =
-                  containerElt.getElementsByClassName("module-wrapper");
-              }
-            }
-          } else {
-            containerElt.insertBefore(
-              expectedElement,
-              moduleWrapperElts[modWrapIdx],
-            );
-            resizeObserver.observe(expectedElement);
-            moduleWrapperElts =
-              containerElt.getElementsByClassName("module-wrapper");
-          }
-        }
+    const existing = new Map<string, HTMLElement>();
+    for (const child of Array.from(modulesPaneElt.children)) {
+      const wrapper = child as HTMLElement;
+      if (wrapper.dataset.moduleId !== undefined) {
+        existing.set(wrapper.dataset.moduleId, wrapper);
       }
     }
-
-    for (
-      let newModIdx = modWrapIdx;
-      newModIdx < newModuleIdOrder.length;
-      newModIdx++
-    ) {
-      const moduleId = newModuleIdOrder[newModIdx];
-      const moduleInfo = modules.find(
-        ({ moduleId: modId }) => modId === moduleId,
-      );
-      if (moduleInfo === undefined) {
-        console.error(`Module "${moduleId}" unfound`);
-        return;
-      } else {
-        const newWrapperElt = createModule(moduleInfo);
-        if (newWrapperElt !== null) {
-          newWrapperElt.dataset.moduleId = moduleInfo.moduleId;
-          containerElt.appendChild(newWrapperElt);
-          resizeObserver.observe(newWrapperElt);
-          moduleWrapperElts =
-            containerElt.getElementsByClassName("module-wrapper");
+    for (let index = 0; index < newModuleIdOrder.length; index++) {
+      const moduleId = newModuleIdOrder[index];
+      let wrapper = existing.get(moduleId);
+      if (wrapper === undefined) {
+        const moduleInfo = modules.find((m) => m.moduleId === moduleId);
+        if (moduleInfo === undefined) {
+          continue;
         }
+        wrapper = createModule(moduleInfo) ?? undefined;
+        if (wrapper === undefined) {
+          continue;
+        }
+        wrapper.dataset.moduleId = moduleId;
       }
+      if (modulesPaneElt.children[index] !== wrapper) {
+        modulesPaneElt.insertBefore(
+          wrapper,
+          modulesPaneElt.children[index] ?? null,
+        );
+      }
+      existing.delete(moduleId);
     }
-    reSyncModulesPlacement(containerElt);
+    for (const wrapper of existing.values()) {
+      wrapper.remove();
+    }
+    const closedModules =
+      modulesPaneElt.getElementsByClassName("closed-modules")[0];
+    if (closedModules !== undefined) {
+      modulesPaneElt.appendChild(closedModules);
+    }
   }
 
   function createModule(moduleInfo: ModuleInformation) {
@@ -249,7 +330,7 @@ export default function createModules({
       logView: logViewState,
       configState,
     };
-    const { moduleFn, moduleTitle, moduleId, isClosable } = moduleInfo;
+    const { moduleFn, moduleTitle, moduleId } = moduleInfo;
     const isClosed = (
       configState.getCurrentState(STATE_PROPS.CLOSED_MODULES) ?? []
     ).includes(moduleId);
@@ -271,10 +352,6 @@ export default function createModules({
     });
     body.classList.add("module-body");
     const buttons = [];
-    const resizeWidthButtonElt = createButton({
-      className: "module-btn btn-width-resize",
-    });
-    buttons.push(resizeWidthButtonElt);
     const moveDownButton = createButton({
       className: "module-btn btn-move-down-module",
       title: "Move the module one level down",
@@ -294,9 +371,7 @@ export default function createModules({
       className: "module-btn btn-min-max-module",
     });
     buttons.push(minimizedButtonElt);
-    if (isClosable) {
-      buttons.push(createClosingButton());
-    }
+    buttons.push(createClosingButton());
     const moduleTitleElt = createCompositeElement(
       "div",
       [
@@ -313,7 +388,6 @@ export default function createModules({
     moduleWrapperElt.appendChild(moduleTitleElt);
     moduleWrapperElt.appendChild(body);
 
-    let currentDisplayedWidthRatio: number | undefined;
     let isModuleCurrentlyMinimized: boolean | undefined;
     configState.subscribe(STATE_PROPS.CLOSED_MODULES, onModuleClosing);
     configState.subscribe(
@@ -321,7 +395,6 @@ export default function createModules({
       onMinimizedModule,
       true,
     );
-    configState.subscribe(STATE_PROPS.WIDTH_RATIOS, onWidthRatioChange, true);
     configState.subscribe(STATE_PROPS.MODULES_ORDER, onModuleOrderChange, true);
     onDestroyCbs.push(disposeModule);
 
@@ -334,59 +407,6 @@ export default function createModules({
       moveUpButton.disabled = moduleId === moduleIdOrder?.[0];
       moveDownButton.disabled =
         moduleId === moduleIdOrder?.[moduleIdOrder.length - 1];
-    }
-
-    function onWidthRatioChange() {
-      const widthRatios = configState.getCurrentState(STATE_PROPS.WIDTH_RATIOS);
-      const newWidthRatio =
-        widthRatios?.[moduleId] ??
-        (moduleInfo.isHalfWidthByDefault ? 2 : 1) ??
-        1;
-
-      if (newWidthRatio === currentDisplayedWidthRatio) {
-        return;
-      }
-
-      currentDisplayedWidthRatio = newWidthRatio;
-      if (currentDisplayedWidthRatio === 2) {
-        moduleWrapperElt.style.width = "calc(50% - 12px)";
-        moduleWrapperElt.dataset.isHalfWidth = "true";
-        resizeWidthButtonElt.innerHTML = fullWidthSvg;
-        resizeWidthButtonElt.title = "Take full width";
-        resizeWidthButtonElt.onclick = () => {
-          const lastWidthRatios = configState.getCurrentState(
-            STATE_PROPS.WIDTH_RATIOS,
-          );
-          if (lastWidthRatios !== undefined) {
-            lastWidthRatios[moduleId] = 1;
-          }
-          configState.updateState(
-            STATE_PROPS.WIDTH_RATIOS,
-            UPDATE_TYPE.REPLACE,
-            lastWidthRatios,
-          );
-          configState.commitUpdates();
-        };
-      } else {
-        moduleWrapperElt.style.width = "calc(100% - 12px)";
-        moduleWrapperElt.dataset.isHalfWidth = "false";
-        resizeWidthButtonElt.innerHTML = halfWidthSvg;
-        resizeWidthButtonElt.title = "Take half width";
-        resizeWidthButtonElt.onclick = () => {
-          const lastWidthRatios = configState.getCurrentState(
-            STATE_PROPS.WIDTH_RATIOS,
-          );
-          if (lastWidthRatios !== undefined) {
-            lastWidthRatios[moduleId] = 2;
-          }
-          configState.updateState(
-            STATE_PROPS.WIDTH_RATIOS,
-            UPDATE_TYPE.REPLACE,
-            lastWidthRatios,
-          );
-          configState.commitUpdates();
-        };
-      }
     }
 
     function onMinimizedModule() {
@@ -454,7 +474,6 @@ export default function createModules({
     function disposeModule(): void {
       configState.unsubscribe(STATE_PROPS.CLOSED_MODULES, onModuleClosing);
       configState.unsubscribe(STATE_PROPS.MINIMIZED_MODULES, onMinimizedModule);
-      configState.unsubscribe(STATE_PROPS.WIDTH_RATIOS, onWidthRatioChange);
       configState.unsubscribe(STATE_PROPS.MODULES_ORDER, onModuleOrderChange);
       if (typeof destroy === "function") {
         destroy();
@@ -469,26 +488,13 @@ export default function createModules({
       const modulesOrder =
         configState.getCurrentState(STATE_PROPS.MODULES_ORDER) ?? [];
       const indexOfModuleId = modulesOrder.indexOf(moduleId);
-      const skippedModuleIds = modulesOrder.filter(
-        (id) => !activeModuleIds.includes(id),
-      );
-
-      let prevIndex = indexOfModuleId - 1;
-      if (indexOfModuleId === -1) {
-        modulesOrder.push(moduleId);
-      } else {
-        while (true) {
-          if (prevIndex < 0) {
-            return;
-          } else if (skippedModuleIds.includes(modulesOrder[prevIndex])) {
-            prevIndex--;
-          } else {
-            modulesOrder[indexOfModuleId] = modulesOrder[prevIndex];
-            modulesOrder[prevIndex] = moduleId;
-            break;
-          }
-        }
+      if (indexOfModuleId <= 0) {
+        return;
       }
+      [modulesOrder[indexOfModuleId - 1], modulesOrder[indexOfModuleId]] = [
+        modulesOrder[indexOfModuleId],
+        modulesOrder[indexOfModuleId - 1],
+      ];
       configState.updateState(
         STATE_PROPS.MODULES_ORDER,
         UPDATE_TYPE.REPLACE,
@@ -501,26 +507,13 @@ export default function createModules({
       const modulesOrder =
         configState.getCurrentState(STATE_PROPS.MODULES_ORDER) ?? [];
       const indexOfModuleId = modulesOrder.indexOf(moduleId);
-      const skippedModuleIds = modulesOrder.filter(
-        (id) => !activeModuleIds.includes(id),
-      );
-
-      let nextModule = indexOfModuleId + 1;
-      if (indexOfModuleId === -1) {
-        modulesOrder.push(moduleId);
-      } else {
-        while (true) {
-          if (nextModule > modulesOrder.length) {
-            return;
-          } else if (skippedModuleIds.includes(modulesOrder[nextModule])) {
-            nextModule++;
-          } else {
-            modulesOrder[indexOfModuleId] = modulesOrder[nextModule];
-            modulesOrder[nextModule] = moduleId;
-            break;
-          }
-        }
+      if (indexOfModuleId < 0 || indexOfModuleId >= modulesOrder.length - 1) {
+        return;
       }
+      [modulesOrder[indexOfModuleId + 1], modulesOrder[indexOfModuleId]] = [
+        modulesOrder[indexOfModuleId],
+        modulesOrder[indexOfModuleId + 1],
+      ];
       configState.updateState(
         STATE_PROPS.MODULES_ORDER,
         UPDATE_TYPE.REPLACE,
@@ -548,7 +541,8 @@ export default function createModules({
     }
 
     function putModuleInClosedElements() {
-      let closedElements = document.getElementsByClassName("closed-modules")[0];
+      let closedElements =
+        modulesPaneElt.getElementsByClassName("closed-modules")[0];
       if (closedElements === undefined) {
         closedElements = createCompositeElement(
           "div",
@@ -560,7 +554,7 @@ export default function createModules({
           ],
           { className: "closed-modules" },
         );
-        containerElt.appendChild(closedElements);
+        modulesPaneElt.appendChild(closedElements);
       }
 
       const closedModuleNameElt = createElement("span", {
@@ -613,7 +607,7 @@ export default function createModules({
           closedModuleNameElt.parentElement.removeChild(closedModuleNameElt);
         }
         const remainingClosedModules =
-          containerElt.getElementsByClassName("closed-module-elt");
+          modulesPaneElt.getElementsByClassName("closed-module-elt");
         if (
           remainingClosedModules.length === 0 &&
           closedElements.parentElement !== null
@@ -622,125 +616,6 @@ export default function createModules({
         }
         addModuleIdToState(configState, moduleId, STATE_PROPS.MODULES_ORDER);
         configState.commitUpdates();
-      }
-    }
-  }
-}
-
-/**
- * By default new modules are placed through simple rules: if a current
- * half-width module at the bottom left is lower than the half-width module at
- * the bottom right, the next half-width module goes to the right, else, it goes
- * to the left.
- * Full-width module do not have this considerations, we could say they are
- * always added to the left.
- *
- * This logic is actually completely handled by CSS, so this is nice, efficient
- * and usually battle-tested.
- *
- * However, under this logic and my current understanding of CSS (which is not
- * high, I'll admit), modules added to the left are not positionned relative to
- * the previous left one to the left, but relative to the bottom of the lowest
- * previous module, which here is the right one.
- *
- * This might give the following aspect:
- * ```
- * +----------+ +----------+
- * | Module 1 | |  Bigger  |
- * +----------+ |  Module  |
- *              |    2     |
- *              +----------+
- *  +----------+
- *  | Module 3 |
- *  +----------+
- * ```
- *
- * Where it could be more logical to have the following aspect instead:
- * ```
- * +----------+ +----------+
- * | Module 1 | |  Bigger  |
- * +----------+ |  Module  |
- * +----------+ |    2     |
- * | Module 3 | +----------+
- * +----------+
- * ```
- *
- * Though this also mean this (which may or may not be logical, depending on
- * you):
- * ```
- * +----------+ +----------+
- * | Module 1 | |          |
- * +----------+ |   HUGE   |
- * +----------+ |  Module  |
- * | Module 3 | |    2     |
- * +----------+ |          |
- *              +----------+
- * ```
- *
- * Here instead of:
- * ```
- * +----------+ +----------+
- * | Module 1 | |          |
- * +----------+ |   HUGE   |
- *              |  Module  |
- *              |    2     |
- *              |          |
- *              +----------+
- *  +----------+
- *  | Module 3 |
- *  +----------+
- * ```
- *
- * This function tries to do just that by uglily playing with the margin-top
- * CSS attribute of the modules.
- *
- * It should be noted however that:
- *
- *   1. I'm very bad at CSS, so this solution may be over-engineered and bad.
- *
- *   2. There's a risk of an infinite updating loop if updating the margin-top
- *      is done to a wrong value, or if it has a side-effect elsewhere that
- *      change the vertical distance between modules to another unexpected
- *      value.
- *      I know it, yet I'm lucky to have never encountered an issue yet, but I
- *      didn't want to spend the effort of writing guards here.
- *
- *   3. The new aspect actually makes the up/down re-arranging of modules much
- *      more confusing than before.
- *
- *      We should probably change that logic. Dragging and dropping modules
- *      for placement would be cool, but it looks like a lot of work.
- *
- * @param {HTMLElement} containerElt - The HTMLElement on which all modules are
- * added.
- */
-function reSyncModulesPlacement(containerElt: HTMLElement) {
-  const moduleWrapperElts =
-    containerElt.getElementsByClassName("module-wrapper");
-  let prevHalfWidthModuleIdx: number | null = null;
-  for (let i = 0; i < moduleWrapperElts.length; i++) {
-    const elt = moduleWrapperElts[i] as HTMLElement;
-    if (elt.nodeType === Node.ELEMENT_NODE) {
-      elt.style.marginTop = "";
-      if (elt.dataset.isHalfWidth !== "true") {
-        prevHalfWidthModuleIdx = null;
-      } else if (prevHalfWidthModuleIdx === null) {
-        prevHalfWidthModuleIdx = i;
-      } else {
-        const placementCurr = elt.getBoundingClientRect();
-        const placementPrev = (
-          moduleWrapperElts[prevHalfWidthModuleIdx] as HTMLElement
-        ).getBoundingClientRect();
-
-        if (placementPrev.left === placementCurr.left) {
-          const diff = placementCurr.top - placementPrev.bottom;
-          if (diff > 15) {
-            elt.style.marginTop = `-${diff - 15}px`;
-          } else {
-            elt.style.marginTop = "";
-          }
-          prevHalfWidthModuleIdx = i;
-        }
       }
     }
   }

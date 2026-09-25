@@ -139,8 +139,7 @@ export function displayError(
 }
 
 /**
- * Returns the default order in which inspector modules should be displayed,
- * from left-to-right and top-to-bottom.
+ * Returns the default top-to-bottom order of the movable inspector modules.
  *
  * The returned value is an array of the module's id in that order.
  * @returns {Array.<string>}

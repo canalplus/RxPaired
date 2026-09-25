@@ -33,17 +33,10 @@ export enum STATE_PROPS {
   CSS_MODE = "cssMode",
   /** Array of the inspector module's id which are currently closed. */
   CLOSED_MODULES = "closedModules",
-  /**
-   * Object where:
-   *   - the keys are the inspector module's id
-   *   - the value is their width ratio:
-   *     - `2` if the module takes half the page's width
-   *     - `1` if the module takes the full width.
-   *
-   * Empty object by default, only the modules whose default width
-   * ratio has been updated should be added.
-   */
-  WIDTH_RATIOS = "widthRatios",
+  /** Percentage of the workspace assigned to the logs on wide screens. */
+  LOG_PANE_WIDTH = "logPaneWidth",
+  /** Whether the log pane is reduced to its restore control. */
+  LOG_PANE_COLLAPSED = "logPaneCollapsed",
   /** Array of the inspector module's id which are currently minimized. */
   MINIMIZED_MODULES = "minimizedModules",
   /** Array of the inspector module's id in the order they are in. */
@@ -109,9 +102,9 @@ export enum STATE_PROPS {
   TIME_REPRESENTATION = "timeRepresentation",
   /** Date at which the client has loaded and sent the init */
   DATE_AT_PAGE_LOAD = "dateAtPageLoad",
-  /** Timestamp of the first displayed log in the log module. */
+  /** Timestamp of the first displayed log in the log view. */
   LOG_MIN_TIMESTAMP_DISPLAYED = "logMinTimeStampDisplayed",
-  /** Timestamp of the last displayed log in the log module. */
+  /** Timestamp of the last displayed log in the log view. */
   LOG_MAX_TIMESTAMP_DISPLAYED = "logMaxTimeStampDisplayed",
   /** History of network requests for audio segments for the current content. */
   AUDIO_REQUEST_HISTORY = "audioRequestHistory",
@@ -175,7 +168,8 @@ export interface LogViewState {
 export interface ConfigState {
   [STATE_PROPS.CSS_MODE]?: string;
   [STATE_PROPS.CLOSED_MODULES]?: string[];
-  [STATE_PROPS.WIDTH_RATIOS]?: Partial<Record<string, number>>;
+  [STATE_PROPS.LOG_PANE_WIDTH]?: number;
+  [STATE_PROPS.LOG_PANE_COLLAPSED]?: boolean;
   [STATE_PROPS.MINIMIZED_MODULES]?: string[];
   [STATE_PROPS.MODULES_ORDER]?: string[];
   [STATE_PROPS.TIME_REPRESENTATION]?: TimeRepresentation;

@@ -4,8 +4,6 @@ import BitrateEstimateModule from "./bitrate_estimate_module";
 import generateAudioVideoBufferContentModule from "./buffer_audio_video_content_module";
 import BufferContentModule from "./buffer_content_module";
 import BufferSizeModule from "./buffer_size_module";
-import HowToUseModule from "./how_to_use_module";
-import LogModule from "./log_module";
 import ManifestParsingTimeHistoryModule from "./manifest_parsing_time_history";
 import PlayerGeneralInfoModule from "./player_general_info_module";
 import generateRequestHistoryModule from "./request_history";
@@ -17,29 +15,9 @@ import StateChangeInformationModule from "./state_change_history";
  */
 const ALL_MODULES: ModuleInformation[] = [
   {
-    moduleTitle: "How to use this tool",
-    moduleId: "howto",
-    moduleFn: HowToUseModule,
-    isClosable: true,
-    isHalfWidthByDefault: false,
-    contexts: ["live-debugging"],
-  },
-
-  {
     moduleTitle: "Player general information",
     moduleId: "gen-infos",
     moduleFn: PlayerGeneralInfoModule,
-    isClosable: true,
-    isHalfWidthByDefault: false,
-    contexts: ["live-debugging", "post-debugger"],
-  },
-
-  {
-    moduleTitle: "Logs",
-    moduleId: "log",
-    moduleFn: LogModule,
-    isClosable: false,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 
@@ -47,16 +25,12 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Buffer gap evolution chart",
     moduleId: "buffer-size",
     moduleFn: BufferSizeModule,
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
   {
     moduleTitle: "Bitrate estimate evolution chart",
     moduleId: "bitrate-estimate",
     moduleFn: BitrateEstimateModule,
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 
@@ -64,8 +38,6 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Video SourceBuffer",
     moduleId: "video-sb",
     moduleFn: generateAudioVideoBufferContentModule("video"),
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 
@@ -73,8 +45,6 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Audio SourceBuffer",
     moduleId: "audio-sb",
     moduleFn: generateAudioVideoBufferContentModule("audio"),
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 
@@ -82,8 +52,6 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Buffer content chart",
     moduleId: "buffer-content",
     moduleFn: BufferContentModule,
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 
@@ -91,40 +59,30 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Video Request Information",
     moduleId: "video-request-information",
     moduleFn: generateRequestHistoryModule("video"),
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
   {
     moduleTitle: "Audio Request Information",
     moduleId: "audio-request-information",
     moduleFn: generateRequestHistoryModule("audio"),
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
   {
     moduleTitle: "Text Request Information",
     moduleId: "text-request-information",
     moduleFn: generateRequestHistoryModule("text"),
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
   {
     moduleTitle: "Player State history",
     moduleId: "player-state-history",
     moduleFn: StateChangeInformationModule,
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
   {
     moduleTitle: "Manifest parsing time history",
     moduleId: "manifest-parsing-time-history",
     moduleFn: ManifestParsingTimeHistoryModule,
-    isClosable: true,
-    isHalfWidthByDefault: true,
     contexts: ["live-debugging", "post-debugger"],
   },
 ];
@@ -143,12 +101,6 @@ export interface ModuleInformation {
    * Will be call each time we want to create the module.
    */
   moduleFn: ModuleFunction;
-
-  /** If set to `false` this module can never be closed. */
-  isClosable: boolean;
-
-  /** If set to true this Module has half the width by default. */
-  isHalfWidthByDefault: boolean;
 
   /**
    * Pages in which the current module can appear:

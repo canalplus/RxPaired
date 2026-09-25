@@ -6,7 +6,7 @@ import {
   LogViewState,
   STATE_PROPS,
 } from "../constants";
-import createModules from "../create_modules";
+import createWorkspace from "../create_workspace";
 import ObservableState, { UPDATE_TYPE } from "../observable_state";
 import { updateStatesFromLogGroup } from "../update_state_from_log";
 import { generatePageUrl } from "../utils";
@@ -72,7 +72,7 @@ export default function generatePostDebuggerPage(
     }
   });
 
-  const disposeModules = createModules({
+  const disposeWorkspace = createWorkspace({
     containerElt: modulesContainerElt,
     context: "post-debugger",
     configState,
@@ -81,7 +81,7 @@ export default function generatePostDebuggerPage(
   });
 
   return () => {
-    disposeModules();
+    disposeWorkspace();
     inspectorState.dispose();
     document.body.removeChild(bodyElement);
   };

@@ -4,11 +4,10 @@ import {
   DEFAULT_MAX_DISPLAYED_LOG_ELEMENTS,
   LogViewState,
   STATE_PROPS,
-} from "../constants";
-import ObservableState, { UPDATE_TYPE } from "../observable_state";
-import { isInitLog, parseAndGenerateInitLog } from "../pages/utils";
-import { convertDateToLocalISOString } from "../utils";
-import { ModuleObject, ModuleFunctionArguments } from "./index";
+} from "./constants";
+import ObservableState, { UPDATE_TYPE } from "./observable_state";
+import { isInitLog, parseAndGenerateInitLog } from "./pages/utils";
+import { convertDateToLocalISOString } from "./utils";
 
 const LOADING_LOGS_MSG = "Loading logs...";
 const NO_LOG_SELECTED_MSG =
@@ -22,10 +21,13 @@ const BULK_LOGS_DISPLAY_TIMEOUT = 75;
 /**
  * @param {Object} args
  */
-export default function LogModule({
+export default function createLogView({
   logView,
   configState,
-}: ModuleFunctionArguments): ModuleObject {
+}: {
+  logView: ObservableState<LogViewState>;
+  configState: ObservableState<ConfigState>;
+}): { body: HTMLElement; destroy: () => void } {
   /**
    * A filter function allowing to filter only wanted logs.
    * `null` if no filter is active.
@@ -88,7 +90,7 @@ export default function LogModule({
   /** If `true`, inputted search string are Regular Expression. */
   let areSearchRegex = false;
 
-  /** Callbacks that will be called when the module is destroyed. */
+  /** Callbacks that will be called when the log view is destroyed. */
   const onDestroyFns: Array<() => void> = [];
 
   const minimumTimeInputElt = createMinimumTimestampInputElement(logView);
@@ -133,41 +135,34 @@ export default function LogModule({
   maximumNbLogsInputElt.onchange = onMaximumNbLogsInputChange;
 
   /** Text input element for only showing a sub-time-range of the logs. */
-  const timeRangeInputElt = strHtml`<div class="log-wrapper">
-    <span style="display: flex; flex-direction: column; align-items: center">
-      Min. timestamp
-      <span>${[
+  const timeRangeInputElt = strHtml`<div class="log-wrapper log-time-controls">
+    <span class="log-time-control">
+      From
+      <span class="log-time-control-inputs">${[
         minimumTimeInputElt,
         minimumDateInputElt,
         createMinimumTimestampButtonElements(logView, onDestroyFns),
       ]}
       </span>
     </span>
-    <span style="display: flex; flex-direction: column; align-items: center">
-      Max. timestamp (empty for no limit)
-      <span>${[
+    <span class="log-time-control">
+      Until (empty: no limit)
+      <span class="log-time-control-inputs">${[
         maximumTimeInputElt,
         maximumDateInputElt,
         createMaximumTimestampButtonElements(logView, onDestroyFns),
       ]}
       </span>
     </span>
-    <span style="display: flex; flex-direction: column; align-items: center">
-      Max. displayed logs
-      <span>${maximumNbLogsInputElt}</span>
+    <span class="log-time-control">
+      Shown logs
+      <span class="log-time-control-inputs">${maximumNbLogsInputElt}</span>
     </span>
-  </div>` as HTMLInputElement;
-  timeRangeInputElt.style.fontSize = "0.9em";
-  timeRangeInputElt.style.display = "flex";
-  timeRangeInputElt.style.marginTop = "10px";
-  timeRangeInputElt.style.overflow = "hidden";
-  timeRangeInputElt.style.justifyContent = "space-between";
+  </div>`;
 
   /** Wrapper elements allowing to filter logs. */
-  const filterFlexElt = strHtml`<div class="log-wrapper"/>`;
-  filterFlexElt.style.display = "flex";
+  const filterFlexElt = strHtml`<div class="log-wrapper log-text-controls"/>`;
   filterFlexElt.style.margin = "5px 0px";
-  filterFlexElt.style.gap = "4px";
 
   const caseSensitiveBtn = createFilterButtonElement(
     "Aa",
@@ -207,14 +202,13 @@ export default function LogModule({
     placeholder="Filter logs based on text"
     class="log-filter"
   />` as HTMLInputElement;
-  logFilterInputElt.style.width = "100%";
   logFilterInputElt.oninput = refreshFilters;
   logFilterInputElt.onchange = refreshFilters;
 
   const logExcludeFilterInputElt = strHtml`<input
   type="input"
   placeholder="Exclude logs based on text, e.g. [info] XHR"
-  class="log-filter"
+  class="log-filter log-exclude-filter"
 />` as HTMLInputElement;
   logExcludeFilterInputElt.oninput = refreshFilters;
   logExcludeFilterInputElt.onchange = refreshFilters;
@@ -223,13 +217,9 @@ export default function LogModule({
   filterFlexElt.appendChild(regexFilterButton);
   filterFlexElt.appendChild(logFilterInputElt);
 
-  const allFiltersElt = strHtml`<div>
-    <div style="border-bottom: 1px dotted;">Filters</div>
-  </div>`;
-  allFiltersElt.style.padding = "8px";
-  allFiltersElt.style.marginTop = "5px";
-  allFiltersElt.style.display = "flex";
-  allFiltersElt.style.flexDirection = "column";
+  const allFiltersElt = strHtml`<details class="log-filters"/>`;
+  const filterSummaryElt = strHtml`<summary>Filters</summary>`;
+  allFiltersElt.appendChild(filterSummaryElt);
   onDestroyFns.push(
     configState.subscribe(
       STATE_PROPS.CSS_MODE,
@@ -492,7 +482,7 @@ export default function LogModule({
   /**
    * Callback called when the index of the selected log changes.
    * This Callback is also mainly here to better handle conflicts between multiple
-   * concurrent LogModules.
+   * concurrent log views.
    */
   function onSelectedLogChange() {
     const hasLogSelected =
@@ -717,6 +707,7 @@ export default function LogModule({
       Infinity;
     const text = logFilterInputElt.value ?? "";
     const excludeText = logExcludeFilterInputElt.value ?? "";
+    updateFiltersSummary();
     if (
       filterObject.minTimeStamp === minRange &&
       filterObject.maxTimeStamp === maxRange &&
@@ -818,11 +809,26 @@ export default function LogModule({
       return;
     }
     maxNbDisplayedLogs = newMax;
+    updateFiltersSummary();
     onLogsHistoryChange(
       "initial",
       logView.getCurrentState(STATE_PROPS.LOGS_HISTORY) ?? [],
       true,
     );
+  }
+
+  function updateFiltersSummary() {
+    const hasActiveFilter =
+      (logView.getCurrentState(STATE_PROPS.LOG_MIN_TIMESTAMP_DISPLAYED) ??
+        0) !== 0 ||
+      (logView.getCurrentState(STATE_PROPS.LOG_MAX_TIMESTAMP_DISPLAYED) ??
+        Infinity) !== Infinity ||
+      logFilterInputElt.value !== "" ||
+      logExcludeFilterInputElt.value !== "" ||
+      maxNbDisplayedLogs !== DEFAULT_MAX_DISPLAYED_LOG_ELEMENTS;
+    filterSummaryElt.textContent = hasActiveFilter
+      ? "Filters (active)"
+      : "Filters";
   }
 
   /**
@@ -1216,8 +1222,6 @@ function createMinimumDateInputElement(
   const value = convertDateToLocalISOString(new Date(minDateInMs));
   const element = strHtml`<input
   type="datetime-local"
-  id="meeting-time"
-  name="meeting-time"
   value="${value}"
   step="0.1"
   />` as HTMLInputElement;
@@ -1258,8 +1262,6 @@ function createMaximumDateInputElement(
   }
   const element = strHtml`<input
   type="datetime-local"
-  id="meeting-time"
-  name="meeting-time"
   value="${value}"
   step="0.1"
   />` as HTMLInputElement;
