@@ -5,6 +5,7 @@ import {
   LogViewState,
   STATE_PROPS,
 } from "./constants";
+import { parseLogPrefixTime } from "./log_prefix";
 import ObservableState, { UPDATE_TYPE } from "./observable_state";
 import { isInitLog, parseAndGenerateInitLog } from "./pages/utils";
 import { convertDateToLocalISOString } from "./utils";
@@ -13,10 +14,14 @@ const LOADING_LOGS_MSG = "Loading logs...";
 const NO_LOG_SELECTED_MSG =
   "No log selected (click on a log to time-travel to it).";
 const LOG_SELECTED_MSG = "A log has been time-travelled to.";
-const timeRegex = /^(\d+(?:.)?(?:\d+)?) (.*)$/s;
+const timeRegex = /^(\d+(?:\.\d+)?)(?:[+-]\d+(?:\.\d+)?)? (.*)$/s;
 
 const MAX_LOGS_TO_PUSH_AT_ONCE = 2000;
 const BULK_LOGS_DISPLAY_TIMEOUT = 75;
+
+function getLogViewText(log: string): string {
+  return isInitLog(log) ? parseAndGenerateInitLog(log).log : log;
+}
 
 /**
  * @param {Object} args
@@ -77,6 +82,9 @@ export default function createLogView({
    * Should be set to `undefined` if no timeout is pending.
    */
   let timeoutInterval: number | undefined;
+
+  /** Invalidates animation frames queued before the displayed logs were cleared. */
+  let displayGeneration = 0;
 
   /**
    * HTML element currently selected.
@@ -326,16 +334,16 @@ export default function createLogView({
       "Click on the log again or here to unselect",
     ]}</span>`;
     unselectSpan.onclick = function () {
+      if (selectedElt !== null) {
+        selectedElt.classList.remove("focused-bg");
+        selectedElt = null;
+      }
       logView.updateState(
         STATE_PROPS.SELECTED_LOG_ID,
         UPDATE_TYPE.REPLACE,
         undefined,
       );
       logView.commitUpdates();
-      if (selectedElt !== null) {
-        selectedElt.classList.remove("focused-bg");
-        selectedElt = null;
-      }
     };
     unselectSpan.style.cursor = "pointer";
     unselectSpan.style.marginLeft = "5px";
@@ -347,7 +355,7 @@ export default function createLogView({
       const logs = logView.getCurrentState(STATE_PROPS.LOGS_HISTORY);
       const log = logs?.find((l) => l[1] === selectedLogId);
       if (log !== undefined) {
-        const match = log[0].match(timeRegex);
+        const match = getLogViewText(log[0]).match(timeRegex);
         if (match !== null) {
           const timestamp = Number(match[1]);
           let displayedTimestamp: number | string = timestamp;
@@ -536,7 +544,11 @@ export default function createLogView({
       timeoutInterval = undefined;
     }
 
+    const generation = displayGeneration;
     window.requestAnimationFrame(() => {
+      if (generation !== displayGeneration) {
+        return;
+      }
       const wasScrolledToBottom = isLogBodyScrolledToBottom();
       let logsToDisplay =
         newLogs.length > maxNbDisplayedLogs
@@ -568,6 +580,8 @@ export default function createLogView({
       const selectedLogId = logView.getCurrentState(
         STATE_PROPS.SELECTED_LOG_ID,
       );
+      // Refresh selection controls when its row enters or leaves the displayed logs.
+      let selectedRowVisibilityChanged = false;
       for (let logIdx = 0; logIdx < logsToDisplay.length; logIdx++) {
         const actualLogIdx = isResetting
           ? logsToDisplay.length - (logIdx + 1)
@@ -580,6 +594,7 @@ export default function createLogView({
           }
           logElt.classList.add("focused-bg");
           selectedElt = logElt;
+          selectedRowVisibilityChanged = true;
         }
         logElt.dataset.logId = String(log[1]);
         logElt.onclick = toggleCurrentElementSelection;
@@ -591,6 +606,10 @@ export default function createLogView({
           if (isResetting) {
             break;
           } else {
+            if (logContainerElt.children[0] === selectedElt) {
+              selectedElt = null;
+              selectedRowVisibilityChanged = true;
+            }
             logContainerElt.removeChild(logContainerElt.children[0]);
           }
         }
@@ -607,16 +626,18 @@ export default function createLogView({
 
       if (timeoutInterval === undefined) {
         const headerType = getHeaderType();
-        if (selectedElt === null && logContainerElt.childNodes.length === 0) {
+        if (selectedLogId !== undefined) {
+          if (headerType !== "selected" || selectedRowVisibilityChanged) {
+            displayLogSelectedHeader();
+          }
+        } else if (logContainerElt.childNodes.length === 0) {
           if (headerType !== "no-log") {
             displayNoLogHeader();
           }
-        } else if (selectedElt === null) {
+        } else {
           if (headerType !== "no-selected") {
             displayNoLogSelectedHeader();
           }
-        } else {
-          displayLogSelectedHeader();
         }
       }
 
@@ -660,7 +681,7 @@ export default function createLogView({
    * Select/unselect the currently clicked log element.
    */
   function toggleCurrentElementSelection(evt: MouseEvent): void {
-    const logElt = evt.target;
+    const logElt = evt.currentTarget;
     if (logElt === null || !(logElt instanceof HTMLElement)) {
       console.error("No element selected");
       return;
@@ -791,8 +812,11 @@ export default function createLogView({
       };
     }
     return (input: string) => {
+      const viewText = getLogViewText(input);
       return (
-        checkLogDate(input) && checkTextFilter(input) && checkTextExclude(input)
+        checkLogDate(viewText) &&
+        checkTextFilter(viewText) &&
+        checkTextExclude(viewText)
       );
     };
   }
@@ -836,8 +860,10 @@ export default function createLogView({
    * modifying the complete log history.
    */
   function clearLogs() {
+    displayGeneration++;
     clearTimeout(timeoutInterval);
     timeoutInterval = undefined;
+    selectedElt = null;
     logContainerElt.innerHTML = "";
     logBodyElt.innerHTML = "";
     if (getHeaderType() !== "no-log") {
@@ -988,26 +1014,9 @@ export function createLogElement(
   configState: ObservableState<ConfigState>,
 ): HTMLElement {
   let namespace;
-  let formattedMsg;
-
-  let logToProcess = logTxt;
-  if (isInitLog(logTxt)) {
-    logToProcess = parseAndGenerateInitLog(logTxt).log;
-  }
-  if (configState.getCurrentState(STATE_PROPS.TIME_REPRESENTATION) === "date") {
-    const match = logToProcess.match(timeRegex);
-    if (match !== null) {
-      const dateAtPageLoad =
-        logView.getCurrentState(STATE_PROPS.DATE_AT_PAGE_LOAD) ?? 0;
-      const timestamp = Number(match[1]) + dateAtPageLoad;
-      const dateStr = convertDateToLocalISOString(new Date(timestamp));
-      formattedMsg = dateStr + " " + match[2];
-    } else {
-      formattedMsg = logToProcess;
-    }
-  } else {
-    formattedMsg = logToProcess;
-  }
+  const logToProcess = getLogViewText(logTxt);
+  const parsed = parseLogPrefixTime(logToProcess);
+  const formattedMsg = parsed?.message ?? logToProcess;
   const indexOfNamespaceStart = formattedMsg.indexOf("[");
   if (indexOfNamespaceStart >= 0) {
     const indexOfNamespaceEnd = formattedMsg.indexOf("]");
@@ -1016,17 +1025,34 @@ export function createLogElement(
         indexOfNamespaceStart + 1,
         indexOfNamespaceEnd,
       );
-      formattedMsg = formattedMsg.replace(
-        /\n/g,
-        "\n" + " ".repeat(indexOfNamespaceEnd + 2),
-      );
     }
   }
   const className =
     namespace !== undefined
       ? "log-line log-" + namespace.toLowerCase()
       : "log-line log-unknown";
-  return strHtml`<pre class=${className}>${formattedMsg}</pre>`;
+  if (parsed === null) {
+    return strHtml`<pre class=${className}>${formattedMsg}</pre>`;
+  }
+  const isDate =
+    configState.getCurrentState(STATE_PROPS.TIME_REPRESENTATION) === "date";
+  const dateAtPageLoad =
+    logView.getCurrentState(STATE_PROPS.DATE_AT_PAGE_LOAD) ?? 0;
+  const displayTime = (time: number): string =>
+    isDate
+      ? convertDateToLocalISOString(new Date(time + dateAtPageLoad))
+      : time.toFixed(2);
+  const captureTime = displayTime(parsed.timestamp);
+  const delay = parsed.offset === undefined ? undefined : -parsed.offset;
+  const delayText =
+    delay !== undefined && Math.abs(delay) >= 1
+      ? `Δ${delay >= 0 ? "+" : ""}${delay.toFixed(2)}ms`
+      : "";
+  const logElt = strHtml`<pre class=${className}>${captureTime}${delayText === "" ? "" : ` ${delayText}`} ${formattedMsg}</pre>`;
+  if (parsed.offset !== undefined) {
+    logElt.title = `App: ${displayTime(parsed.timestamp + parsed.offset)}; capture: ${captureTime}; app - capture: ${parsed.offset.toFixed(2)} ms`;
+  }
+  return logElt;
 }
 
 function createMinimumTimestampButtonElements(

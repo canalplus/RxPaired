@@ -119,6 +119,9 @@ export interface DeviceInitData {
    * in milliseconds.
    */
   dateMs: number;
+  version?: 2;
+  time?: "capture";
+  offset?: "app-capture";
 }
 
 /**
