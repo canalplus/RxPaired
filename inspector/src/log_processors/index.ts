@@ -3,6 +3,7 @@ import {
   InventoryTimelineRangeInfo,
   InventoryTimelineRepresentationInfo,
   RequestInformation,
+  RuntimePerformanceSnapshot,
   STATE_PROPS,
 } from "../constants";
 import { UPDATE_TYPE } from "../observable_state";
@@ -12,7 +13,7 @@ const REGEX_CONTENT_DURATION =
   /Updating duration (?:newDuration=)?([0-9]+(?:\.[0-9]+)?)$/;
 const REGEX_PLAYBACK_TIMELINE_POSITION = /\^([0-9]+(?:\.[0-9]+)?)/;
 const REGEX_PLAYER_STATE_CHANGE_STATE_PRE_4_4_0 = /(\w+)$/;
-const REGEX_PLAYER_STATE_CHANGE_STATE_POST_4_4_0 = /newState=\"(\w+)"/;
+const REGEX_PLAYER_STATE_CHANGE_STATE_POST_4_4_0 = /newState="(\w+)"/;
 const REGEX_PLAYBACK_INVENTORY_BITRATE = /\((\d+)\)$/;
 const REGEX_PLAYBACK_INVENTORY_RANGE = /^(\d+\.\d+)\|(.)\|(\d+\.\d+)/;
 const REGEX_BEGINNING_REQUEST_PRE_4_4_0 =
@@ -56,6 +57,17 @@ const REGEX_BITRATE_ESTIMATE =
  *   object once all of its `updatedProps` are already known.
  */
 const LogProcessors: Array<LogProcessor<keyof InspectorState>> = [
+  {
+    filter: (_log: string, namespace: string | undefined): boolean =>
+      namespace === "Performance",
+    processor: (
+      log: string,
+      logId: number,
+      timestamp: number,
+    ): Array<StateUpdate<keyof InspectorState>> =>
+      processPerformanceLog(log, logId, timestamp),
+    updatedProps: [STATE_PROPS.PERFORMANCE_SNAPSHOTS],
+  },
   {
     filter: (log: string): boolean =>
       // Pre-v4.4.0
@@ -186,10 +198,11 @@ export interface LogProcessor<T extends keyof InspectorState> {
    * Indicates if the current LogProcessor is able to parse state from the
    * given log line.
    * @param {string} log - The log line in question
+   * @param {string|undefined} namespace - Its parsed namespace, if any
    * @returns {boolean} - `true` if the current LogProcessor can parse this log
    * line. `false` otherwise.
    */
-  filter(log: string): boolean;
+  filter(log: string, namespace: string | undefined): boolean;
   /**
    * State updates that can be deduced from the given log line.
    * Returns an empty array if no state can be deduced.
@@ -212,6 +225,112 @@ export interface StateUpdate<P extends keyof InspectorState> {
   updateType: UPDATE_TYPE;
   /** The value accompanying this update type (@see UPDATE_TYPE). */
   updateValue: InspectorState[P];
+}
+
+function processPerformanceLog(
+  logTxt: string,
+  logId: number,
+  observedAt: number,
+): Array<StateUpdate<STATE_PROPS.PERFORMANCE_SNAPSHOTS>> {
+  let value: Record<string, unknown>;
+  try {
+    const parsedValue = JSON.parse(logTxt) as unknown;
+    if (
+      typeof parsedValue !== "object" ||
+      parsedValue === null ||
+      Array.isArray(parsedValue)
+    ) {
+      return [];
+    }
+    value = parsedValue as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const numberProperties = ["startTime", "endTime", "videoElementCount"];
+  const nullableNumberProperties = [
+    "longTaskCount",
+    "longTaskDuration",
+    "longestLongTask",
+    "longAnimationFrameCount",
+    "longAnimationFrameDuration",
+    "longAnimationFrameBlockingDuration",
+    "longestLongAnimationFrame",
+    "interactionCount",
+    "longestInteraction",
+    "longestInputDelay",
+    "sampledVideoElementCount",
+    "totalVideoFrames",
+    "droppedVideoFrames",
+  ];
+  const nullableNumberGroups = [
+    ["longTaskCount", "longTaskDuration", "longestLongTask"],
+    [
+      "longAnimationFrameCount",
+      "longAnimationFrameDuration",
+      "longAnimationFrameBlockingDuration",
+      "longestLongAnimationFrame",
+    ],
+    ["interactionCount", "longestInteraction", "longestInputDelay"],
+    ["sampledVideoElementCount", "totalVideoFrames", "droppedVideoFrames"],
+  ];
+  if (
+    !numberProperties.every((property) => isFiniteNumber(value[property])) ||
+    !nullableNumberProperties.every((property) =>
+      isFiniteNumberOrNull(value[property]),
+    ) ||
+    !nullableNumberGroups.every((properties) =>
+      properties.every(
+        (property) =>
+          (value[properties[0]] === null) === (value[property] === null),
+      ),
+    ) ||
+    (value.longestInteractionName !== null &&
+      typeof value.longestInteractionName !== "string") ||
+    (value.interactionCount === null) !==
+      (value.longestInteractionName === null)
+  ) {
+    return [];
+  }
+  const snapshot: RuntimePerformanceSnapshot = {
+    startTime: value.startTime as number,
+    endTime: value.endTime as number,
+    longTaskCount: value.longTaskCount as number | null,
+    longTaskDuration: value.longTaskDuration as number | null,
+    longestLongTask: value.longestLongTask as number | null,
+    longAnimationFrameCount: value.longAnimationFrameCount as number | null,
+    longAnimationFrameDuration: value.longAnimationFrameDuration as
+      | number
+      | null,
+    longAnimationFrameBlockingDuration:
+      value.longAnimationFrameBlockingDuration as number | null,
+    longestLongAnimationFrame: value.longestLongAnimationFrame as number | null,
+    interactionCount: value.interactionCount as number | null,
+    longestInteraction: value.longestInteraction as number | null,
+    longestInputDelay: value.longestInputDelay as number | null,
+    longestInteractionName: value.longestInteractionName,
+    videoElementCount: value.videoElementCount as number,
+    sampledVideoElementCount: value.sampledVideoElementCount as number | null,
+    totalVideoFrames: value.totalVideoFrames as number | null,
+    droppedVideoFrames: value.droppedVideoFrames as number | null,
+    observedAt,
+    logId,
+  };
+
+  return [
+    {
+      property: STATE_PROPS.PERFORMANCE_SNAPSHOTS,
+      updateType: UPDATE_TYPE.PUSH,
+      updateValue: [snapshot],
+    },
+  ];
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isFiniteNumberOrNull(value: unknown): value is number | null {
+  return value === null || isFiniteNumber(value);
 }
 
 /**

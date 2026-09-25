@@ -116,6 +116,8 @@ export enum STATE_PROPS {
   STATE_CHANGE_HISTORY = "stateChangeHistory",
   /** History of the time taken to parse the Manifest. */
   MANIFEST_PARSING_TIME_HISTORY = "manifestParsingTimeHistory",
+  /** History of runtime performance snapshots collected on the device. */
+  PERFORMANCE_SNAPSHOTS = "performanceSnapshots",
 }
 
 export type TimeRepresentation = "date" | "timestamp";
@@ -151,6 +153,32 @@ export interface InspectorState {
     timeMs: number;
     timestamp: number;
   }>;
+  [STATE_PROPS.PERFORMANCE_SNAPSHOTS]?: RuntimePerformanceSnapshot[];
+}
+
+/** Aggregated runtime responsiveness data for a bounded time window. */
+export interface RuntimePerformanceSnapshot {
+  /** Timestamp at which RxPaired observed the entry on the device. */
+  observedAt: number;
+  /** Identifier of the log containing this event. */
+  logId: number;
+  startTime: number;
+  endTime: number;
+  longTaskCount: number | null;
+  longTaskDuration: number | null;
+  longestLongTask: number | null;
+  longAnimationFrameCount: number | null;
+  longAnimationFrameDuration: number | null;
+  longAnimationFrameBlockingDuration: number | null;
+  longestLongAnimationFrame: number | null;
+  interactionCount: number | null;
+  longestInteraction: number | null;
+  longestInputDelay: number | null;
+  longestInteractionName: string | null;
+  videoElementCount: number;
+  sampledVideoElementCount: number | null;
+  totalVideoFrames: number | null;
+  droppedVideoFrames: number | null;
 }
 
 /**

@@ -7,6 +7,8 @@ import BufferSizeModule from "./buffer_size_module";
 import ManifestParsingTimeHistoryModule from "./manifest_parsing_time_history";
 import PlayerGeneralInfoModule from "./player_general_info_module";
 import generateRequestHistoryModule from "./request_history";
+import RuntimePerformanceHistoryModule from "./runtime_performance_history_module";
+import RuntimePerformanceModule from "./runtime_performance_module";
 import StateChangeInformationModule from "./state_change_history";
 
 /**
@@ -83,6 +85,19 @@ const ALL_MODULES: ModuleInformation[] = [
     moduleTitle: "Manifest parsing time history",
     moduleId: "manifest-parsing-time-history",
     moduleFn: ManifestParsingTimeHistoryModule,
+    contexts: ["live-debugging", "post-debugger"],
+  },
+  {
+    moduleTitle: "Runtime performance",
+    moduleId: "runtime-performance",
+    moduleFn: RuntimePerformanceModule,
+    contexts: ["live-debugging", "post-debugger"],
+  },
+
+  {
+    moduleTitle: "Runtime performance history",
+    moduleId: "runtime-performance-history",
+    moduleFn: RuntimePerformanceHistoryModule,
     contexts: ["live-debugging", "post-debugger"],
   },
 ];
