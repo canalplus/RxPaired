@@ -121,11 +121,8 @@ function createBufferSizeChart(
   function reRender(): void {
     const bufferGaps = state.getCurrentState(STATE_PROPS.BUFFER_GAPS);
     if (bufferGaps !== undefined && bufferGaps.length > 0) {
-      const lastDate =
-        bufferGaps.length === 0
-          ? null
-          : bufferGaps[bufferGaps.length - 1].timestamp;
-      const minimumTime = Math.max(0, (lastDate ?? 0) - TIME_SAMPLES_MS);
+      const lastDate = bufferGaps[bufferGaps.length - 1].timestamp;
+      const minimumTime = Math.max(0, lastDate - TIME_SAMPLES_MS);
       let i;
       for (i = bufferGaps.length - 1; i >= 1; i--) {
         if (bufferGaps[i].timestamp <= minimumTime) {
